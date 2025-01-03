@@ -20,6 +20,7 @@ export async function GET() {
           name: true,
           image: true,
           username: true,
+          stripeLink: true,
         },
       },
       creator: {
@@ -27,6 +28,7 @@ export async function GET() {
           name: true,
           image: true,
           username: true,
+          stripeLink: true,
         },
       },
     },

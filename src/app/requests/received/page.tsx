@@ -18,6 +18,13 @@ type Work = {
     name: string;
     image: string;
     username: string | null;
+    stripeLink: string | null;
+  };
+  creator: {
+    name: string;
+    image: string;
+    username: string | null;
+    stripeLink: string | null;
   };
 };
 
@@ -25,6 +32,7 @@ export default function ReceivedRequests() {
   const { data: session } = useSession();
   const router = useRouter();
   const [receivedWorks, setReceivedWorks] = useState<Work[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!session) {
@@ -35,10 +43,13 @@ export default function ReceivedRequests() {
     // 受信したリクエストを取得
     fetch(`/api/works/received`)
       .then((res) => res.json())
-      .then((data) => setReceivedWorks(data));
+      .then((data) => {
+        setReceivedWorks(data);
+      });
   }, [session, router]);
 
   const handleFileUpload = async (workId: string, file: File) => {
+    setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
 
@@ -48,6 +59,8 @@ export default function ReceivedRequests() {
         body: formData,
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         // リクエスト一覧を更新
         const updatedWorks = await fetch(`/api/works/received`).then((res) =>
@@ -56,12 +69,30 @@ export default function ReceivedRequests() {
         setReceivedWorks(updatedWorks);
         alert('ファイルを納品しました');
       } else {
-        const error = await response.text();
-        alert(`エラーが発生しました: ${error}`);
+        alert(`エラーが発生しました: ${data.error}`);
       }
     } catch (error) {
       console.error('Upload error:', error);
       alert('ファイルのアップロードに失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async (workId: string) => {
+    try {
+      const response = await fetch(`/api/works/${workId}/delivery`);
+      const data = await response.json();
+
+      if (response.ok && data.url) {
+        // 新しいタブでダウンロードURLを開く
+        window.open(data.url, '_blank');
+      } else {
+        alert('ダウンロードURLの取得に失敗しました');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('ダウンロードURLの取得に失敗しました');
     }
   };
 
@@ -159,11 +190,13 @@ export default function ReceivedRequests() {
                         const file = e.target.files?.[0];
                         if (file) handleFileUpload(work.id, file);
                       }}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      disabled={loading}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
                     />
                     <button
                       onClick={() => handleReject(work.id)}
-                      className="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md"
+                      disabled={loading}
+                      className="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md disabled:opacity-50"
                     >
                       お断りする
                     </button>
@@ -178,6 +211,14 @@ export default function ReceivedRequests() {
                 {work.status === 'delivered' && (
                   <div className="flex flex-col space-y-2">
                     <span className="text-blue-600">納品済み</span>
+                    {work.deliveryFileUrl && (
+                      <button
+                        onClick={() => handleDownload(work.id)}
+                        className="w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
+                      >
+                        ファイルをダウンロード
+                      </button>
+                    )}
                     <button
                       onClick={() => handleConfirmPayment(work.id)}
                       className="w-full px-4 py-2 text-sm text-green-600 hover:bg-green-50 rounded-md"

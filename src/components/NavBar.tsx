@@ -6,11 +6,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 export default function NavBar() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleLogin = () => {
-    signIn('twitter', { callbackUrl: '/' });
+    signIn('twitter');
   };
 
   return (
@@ -24,7 +24,9 @@ export default function NavBar() {
 
           {/* ユーザーメニュー */}
           <div className="relative">
-            {session ? (
+            {status === 'loading' ? (
+              <div>Loading...</div>
+            ) : status === 'authenticated' && session?.user ? (
               <>
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}

@@ -5,42 +5,55 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
-  const { data: session } = useSession();
+  const { data: session, status: authStatus } = useSession();
   const router = useRouter();
-  const [status, setStatus] = useState<'available' | 'availableButHidden' | 'unavailable'>('unavailable');
+  const [userStatus, setUserStatus] = useState<'available' | 'availableButHidden' | 'unavailable'>('unavailable');
   const [introduction, setIntroduction] = useState('');
   const [price, setPrice] = useState<number>(1000);
+  const [stripeUrl, setStripeUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    if (!session?.user?.email) {
-      router.push('/auth/signin');
+    if (authStatus === 'loading') return;
+    
+    if (authStatus === 'unauthenticated') {
+      router.replace('/auth/signin');
       return;
     }
 
-    fetch('/api/users/me')
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error('プロフィールの取得に失敗しました');
-        }
-        return res.json();
-      })
-      .then((data) => {
-        setStatus(data.status || 'unavailable');
-        setIntroduction(data.introduction || '');
-        setPrice(data.price || 1000);
-      })
-      .catch((error) => {
-        console.error('Error:', error);
-        setError('プロフィールの取得に失敗しました');
-      });
-  }, [session, router]);
+    if (authStatus === 'authenticated' && session?.user?.id) {
+      setIsLoading(true);
+      fetch('/api/users/me')
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error('プロフィールの取得に失敗しました');
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setUserStatus(data.status || 'unavailable');
+          setIntroduction(data.introduction || '');
+          setPrice(data.price || 1000);
+          setStripeUrl(data.stripeLink || '');
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          setError('プロフィールの取得に失敗しました');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+  }, [authStatus, session, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
+    setSuccess('');
 
     try {
       const response = await fetch('/api/users/me', {
@@ -49,9 +62,10 @@ export default function ProfilePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          status,
+          status: userStatus,
           introduction,
-          price
+          price,
+          stripeUrl
         }),
       });
 
@@ -59,7 +73,7 @@ export default function ProfilePage() {
         throw new Error('プロフィールの更新に失敗しました');
       }
 
-      router.refresh();
+      setSuccess('プロフィールを更新しました');
     } catch (error) {
       console.error('Error:', error);
       setError('プロフィールの更新に失敗しました');
@@ -68,7 +82,17 @@ export default function ProfilePage() {
     }
   };
 
-  if (!session) {
+  if (authStatus === 'loading' || isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-500">読み込み中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
     return null;
   }
 
@@ -80,14 +104,19 @@ export default function ProfilePage() {
           {error}
         </div>
       )}
+      {success && (
+        <div className="mb-4 p-4 text-green-700 bg-green-100 rounded-md">
+          {success}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700">
             ステータス
           </label>
           <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as typeof status)}
+            value={userStatus}
+            onChange={(e) => setUserStatus(e.target.value as typeof userStatus)}
             className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
           >
             <option value="available">リクエスト受付中</option>
@@ -131,6 +160,26 @@ export default function ProfilePage() {
                   setPrice(value);
                 }
               }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="stripeUrl"
+            className="block text-sm font-medium text-gray-700"
+          >
+            ストライプの決済URL
+          </label>
+          <div className="mt-1">
+            <input
+              type="text"
+              name="stripeUrl"
+              id="stripeUrl"
+              className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              value={stripeUrl}
+              onChange={(e) => setStripeUrl(e.target.value)}
+              placeholder="https://buy.stripe.com/..."
             />
           </div>
         </div>
