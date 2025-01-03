@@ -23,7 +23,8 @@ export default function ReceivedRequestsPage() {
   const { data: session } = useSession();
   const [works, setWorks] = useState<Work[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [uploadingWorkId, setUploadingWorkId] = useState<string | null>(null);
+  const [downloadingWorkId, setDownloadingWorkId] = useState<string | null>(null);
+  const [deliveringWorkId, setDeliveringWorkId] = useState<string | null>(null);
 
   // 統計情報を計算
   const stats = {
@@ -32,6 +33,63 @@ export default function ReceivedRequestsPage() {
     delivered: works.filter(w => w.status === 'delivered').length,
     paid: works.filter(w => w.status === 'paid').length,
     rejected: works.filter(w => w.status === 'rejected').length,
+  };
+
+  const handleDownload = async (workId: string) => {
+    setDownloadingWorkId(workId);
+    try {
+      const response = await fetch(`/api/works/by-id/${workId}/download-url`);
+      if (response.ok) {
+        const { url } = await response.json();
+        window.open(url, '_blank');
+      } else {
+        throw new Error('ダウンロードURLの取得に失敗しました');
+      }
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('ダウンロードに失敗しました');
+    } finally {
+      setDownloadingWorkId(null);
+    }
+  };
+
+  const handleDeliver = async (workId: string) => {
+    setDeliveringWorkId(workId);
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`/api/works/by-id/${workId}/deliver`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          // 成功したら作品リストを更新
+          const updatedWorks = works.map(work => 
+            work.id === workId ? { ...work, status: 'delivered' } : work
+          );
+          setWorks(updatedWorks);
+          alert('納品が完了しました');
+        } else {
+          const errorText = await response.text();
+          console.error('Delivery failed:', errorText);
+          alert(`納品に失敗しました: ${errorText}`);
+        }
+      };
+      input.click();
+    } catch (error) {
+      console.error('Error delivering work:', error);
+      alert(error instanceof Error ? error.message : '納品に失敗しました');
+    } finally {
+      setDeliveringWorkId(null);
+    }
   };
 
   useEffect(() => {
@@ -54,173 +112,119 @@ export default function ReceivedRequestsPage() {
     }
   }, [session]);
 
-  const handleFileUpload = async (workId: string, file: File) => {
-    setUploadingWorkId(workId);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`/api/works/by-id/${workId}/deliver`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('納品に失敗しました');
-      }
-
-      // ワークリストを更新
-      setWorks(works.map(work => 
-        work.id === workId 
-          ? { ...work, status: 'delivered' as WorkStatus }
-          : work
-      ));
-      alert('納品が完了しました');
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      alert('納品に失敗しました');
-    } finally {
-      setUploadingWorkId(null);
-    }
-  };
-
-  const handleReject = async (workId: string) => {
-    if (!confirm('このリクエストをお断りしますか？')) return;
-
-    try {
-      const response = await fetch(`/api/works/by-id/${workId}/reject`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        setWorks(works.map(work => 
-          work.id === workId 
-            ? { ...work, status: 'rejected' as WorkStatus }
-            : work
-        ));
-        alert('リクエストをお断りしました');
-      }
-    } catch (error) {
-      console.error('Error rejecting work:', error);
-      alert('お断りに失敗しました');
-    }
-  };
-
   if (!session) {
-    return (
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <div className="text-center">
-          <p className="text-gray-600">ログインしてください</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <div className="text-center">
-          <p className="text-gray-600">読み込み中...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">受信したリクエスト一覧</h1>
-        <Link
-          href="/requests/sent"
-          className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-        >
-          <span>送信箱へ</span>
-          <span>→</span>
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">総リクエスト数</p>
-          <p className="text-2xl font-bold text-gray-700">{stats.total}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">依頼中</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.requested}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">納品済み</p>
-          <p className="text-2xl font-bold text-yellow-600">{stats.delivered}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">支払い完了</p>
-          <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">お断り</p>
-          <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
+        <h1 className="text-2xl font-bold">受信したリクエスト</h1>
+        <div className="flex gap-4">
+          <Link
+            href="/requests/received"
+            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+          >
+            受信一覧
+          </Link>
+          <Link
+            href="/requests/sent"
+            className="px-4 py-2 border border-yellow-500 text-yellow-600 rounded-md hover:bg-yellow-50"
+          >
+            送信一覧
+          </Link>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {works.length === 0 ? (
-          <p className="text-gray-600 text-center py-8">
-            受信したリクエストはありません
-          </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="col-span-full bg-white p-4 rounded-lg shadow mb-6">
+          <h2 className="text-lg font-semibold mb-2">統計情報</h2>
+          <div className="grid grid-cols-5 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">全体</p>
+              <p className="text-xl font-bold">{stats.total}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">リクエスト中</p>
+              <p className="text-xl font-bold">{stats.requested}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">納品済み</p>
+              <p className="text-xl font-bold">{stats.delivered}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">支払い済み</p>
+              <p className="text-xl font-bold">{stats.paid}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">拒否</p>
+              <p className="text-xl font-bold">{stats.rejected}</p>
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="col-span-full text-center py-8">読み込み中...</div>
+        ) : works.length === 0 ? (
+          <div className="col-span-full text-center py-8">
+            リクエストはまだありません
+          </div>
         ) : (
           works.map((work) => (
-            <div
-              key={work.id}
-              className={`shadow rounded-lg overflow-hidden ${
-                work.status === 'requested' ? 'bg-blue-50' :
-                work.status === 'delivered' ? 'bg-yellow-50' :
-                work.status === 'paid' ? 'bg-green-50' :
-                work.status === 'rejected' ? 'bg-red-50' :
-                'bg-white'
-              }`}
-            >
+            <div key={work.id} className="bg-white rounded-lg shadow">
               <div className="p-6">
-                <div className="flex items-center space-x-4 mb-4">
-                  <Image
-                    src={work.requester.image}
-                    alt={work.requester.name}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 relative">
+                      <Image
+                        src={work.requester.image || '/default-avatar.png'}
+                        alt={work.requester.name}
+                        className="rounded-full"
+                        fill
+                        sizes="40px"
+                      />
+                    </div>
+                    <div className="ml-3">
+                      <p className="font-semibold">{work.requester.name}</p>
+                      {work.requester.username && (
+                        <p className="text-sm text-gray-500">
+                          @{work.requester.username}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                   <div>
-                    <p className="font-medium">{work.requester.name}</p>
-                    {work.requester.username && (
-                      <p className="text-sm text-gray-500">
-                        @{work.requester.username}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">リクエストID</span>
-                    <span className="text-sm font-medium">#{work.sequentialId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">金額</span>
-                    <span className="text-sm font-medium">
+                    <span className="text-lg font-bold">
                       ¥{work.amount.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">ステータス</span>
-                    <span className={`text-sm font-medium ${
-                      work.status === 'requested' ? 'text-blue-600' :
-                      work.status === 'delivered' ? 'text-yellow-600' :
-                      work.status === 'paid' ? 'text-green-600' :
-                      'text-red-600'
-                    }`}>
-                      {work.status === 'requested' && '依頼中'}
-                      {work.status === 'accepted' && '受付済み'}
-                      {work.status === 'rejected' && 'お断り'}
-                      {work.status === 'delivered' && '納品済み'}
-                      {work.status === 'paid' && '支払い完了'}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-sm text-gray-500">#{work.sequentialId}</span>
+                    <span
+                      className={`px-2 py-1 text-sm rounded-full ${
+                        work.status === 'requested'
+                          ? 'bg-blue-100 text-blue-800'
+                          : work.status === 'delivered'
+                          ? 'bg-green-100 text-green-800'
+                          : work.status === 'paid'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : work.status === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {work.status === 'requested'
+                        ? 'リクエスト中'
+                        : work.status === 'delivered'
+                        ? '納品済み'
+                        : work.status === 'paid'
+                        ? '支払い済み'
+                        : work.status === 'rejected'
+                        ? '拒否'
+                        : work.status}
                     </span>
                   </div>
                   <div>
@@ -230,27 +234,28 @@ export default function ReceivedRequestsPage() {
                     </p>
                   </div>
                   {work.status === 'requested' && (
-                    <div className="mt-4 flex space-x-4">
-                      <label className="flex-1">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleFileUpload(work.id, file);
-                          }}
-                        />
-                        <span className={`block text-center px-4 py-2 border border-blue-500 rounded-md text-blue-600 hover:bg-blue-50 cursor-pointer ${
-                          uploadingWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}>
-                          {uploadingWorkId === work.id ? '納品中...' : '納品する'}
-                        </span>
-                      </label>
+                    <div className="mt-4">
                       <button
-                        onClick={() => handleReject(work.id)}
-                        className="flex-1 px-4 py-2 border border-red-500 rounded-md text-red-600 hover:bg-red-50"
+                        onClick={() => handleDeliver(work.id)}
+                        disabled={deliveringWorkId === work.id}
+                        className={`w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 ${
+                          deliveringWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
-                        お断りする
+                        {deliveringWorkId === work.id ? '納品中...' : '納品する'}
+                      </button>
+                    </div>
+                  )}
+                  {work.status === 'delivered' && (
+                    <div className="mt-4">
+                      <button
+                        onClick={() => handleDownload(work.id)}
+                        disabled={downloadingWorkId === work.id}
+                        className={`w-full px-4 py-2 border border-yellow-500 rounded-md text-yellow-600 hover:bg-yellow-50 ${
+                          downloadingWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {downloadingWorkId === work.id ? 'ダウンロード中...' : '納品物をダウンロード'}
                       </button>
                     </div>
                   )}

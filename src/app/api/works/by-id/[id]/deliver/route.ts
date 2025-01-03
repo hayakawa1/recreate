@@ -39,33 +39,53 @@ export async function POST(
     const formData = await request.formData();
     const file = formData.get('file') as File;
     if (!file) {
-      return new NextResponse('No file uploaded', { status: 400 });
+      return new NextResponse('ファイルがアップロードされていません', { status: 400 });
     }
 
     // ファイルをバッファに変換
     const buffer = await file.arrayBuffer();
 
     // R2にアップロード
-    const key = `works/${params.id}/${Date.now()}`;
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: Buffer.from(buffer),
-        ContentType: file.type,
-      })
-    );
+    const key = `works/${params.id}`;
+    console.log('Uploading file with key:', key);
+    console.log('Bucket name:', process.env.R2_BUCKET_NAME);
+    console.log('File type:', file.type);
+    console.log('File size:', file.size);
+    
+    try {
+      if (!process.env.R2_BUCKET_NAME) {
+        throw new Error('R2_BUCKET_NAME is not set');
+      }
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+          Body: Buffer.from(buffer),
+          ContentType: file.type,
+        })
+      );
+      console.log('File uploaded successfully');
+    } catch (uploadError) {
+      console.error('Error uploading file:', uploadError);
+      return new NextResponse(uploadError instanceof Error ? uploadError.message : 'ファイルのアップロードに失敗しました', { status: 500 });
+    }
 
     // ステータスを納品済みに更新
-    await sql`
-      UPDATE works 
-      SET status = 'delivered'
-      WHERE id = ${params.id}
-    `;
+    try {
+      await sql`
+        UPDATE works 
+        SET status = 'delivered'
+        WHERE id = ${params.id}
+      `;
+    } catch (dbError) {
+      console.error('Error updating work status:', dbError);
+      return new NextResponse('ステータスの更新に失敗しました', { status: 500 });
+    }
 
     return new NextResponse('OK');
   } catch (error) {
     console.error('Error delivering work:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return new NextResponse(error instanceof Error ? error.message : 'Internal Server Error', { status: 500 });
   }
 } 
