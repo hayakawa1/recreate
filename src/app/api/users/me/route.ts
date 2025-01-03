@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { NextResponse } from 'next/server'
 import { authOptions } from '@/lib/auth'
-import { getPool } from '@/lib/db'
+import { getPool, hasValidPriceEntry } from '@/lib/db'
 import crypto from 'crypto'
 
 export async function GET() {
@@ -40,7 +40,13 @@ export async function GET() {
       return new NextResponse('ユーザー情報が見つかりません。再度ログインしてください。', { status: 404 })
     }
 
-    return NextResponse.json(user)
+    // 有効な料金プランの存在チェック
+    const hasValidPlan = await hasValidPriceEntry(session.user.id);
+    return NextResponse.json({
+      ...user,
+      hasValidPlan,
+      canAcceptRequests: hasValidPlan && (user.status === 'available' || user.status === 'availableButHidden')
+    })
   } catch (error) {
     console.error('Failed to get user:', error)
     return new NextResponse('サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。', { status: 500 })
@@ -62,12 +68,6 @@ export async function PUT(req: Request) {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
-
-      // ユーザー情報を更新
-      const { rows: [user] } = await client.query(
-        'UPDATE users SET status = $1, description = $2 WHERE id = $3 RETURNING *',
-        [status, description, session.user.id]
-      )
 
       // 既存の価格設定を非表示に設定
       await client.query(
@@ -98,8 +98,29 @@ export async function PUT(req: Request) {
         )
       }
 
+      // 有効な料金プランの存在チェック
+      const hasValidPlan = await hasValidPriceEntry(session.user.id);
+
+      // 有効な料金プランがない場合は強制的にunavailableに設定
+      const newStatus = !hasValidPlan ? 'unavailable' : status;
+
+      // ユーザー情報を更新
+      const { rows: [user] } = await client.query(
+        'UPDATE users SET status = $1, description = $2 WHERE id = $3 RETURNING *',
+        [newStatus, description, session.user.id]
+      )
+
       await client.query('COMMIT')
-      return NextResponse.json(user)
+
+      // レスポンスに警告メッセージを追加
+      const response = {
+        ...user,
+        hasValidPlan,
+        canAcceptRequests: hasValidPlan && (newStatus === 'available' || newStatus === 'availableButHidden'),
+        warning: !hasValidPlan ? '有効な料金プランが設定されていないため、受付停止状態に設定されました。' : undefined
+      };
+
+      return NextResponse.json(response)
     } catch (error) {
       await client.query('ROLLBACK')
       throw error

@@ -14,17 +14,39 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { userId, priceId, message } = body;
 
-    // 料金プランの情報を取得
+    // クリエイターの状態を確認
+    const userResult = await query(
+      'SELECT status FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return NextResponse.json({ error: 'Creator not found' }, { status: 404 });
+    }
+
+    const userStatus = userResult.rows[0].status;
+    if (userStatus === 'unavailable') {
+      return NextResponse.json({ error: 'Creator is not accepting requests' }, { status: 400 });
+    }
+
+    // 料金プランの有効性を確認
     const priceResult = await query(
-      'SELECT amount, stripe_url FROM price_entries WHERE id = $1',
-      [priceId]
+      `SELECT amount, stripe_url, is_hidden 
+       FROM price_entries 
+       WHERE id = $1 AND user_id = $2`,
+      [priceId, userId]
     );
 
     if (priceResult.rows.length === 0) {
       return NextResponse.json({ error: 'Price plan not found' }, { status: 404 });
     }
 
-    const { amount, stripe_url } = priceResult.rows[0];
+    const { amount, stripe_url, is_hidden } = priceResult.rows[0];
+
+    // 料金プランの有効性チェック
+    if (amount <= 0 || !stripe_url || is_hidden) {
+      return NextResponse.json({ error: 'Invalid price plan' }, { status: 400 });
+    }
 
     // リクエストを作成
     const result = await query(

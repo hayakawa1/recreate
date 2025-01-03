@@ -40,4 +40,45 @@ export async function query(text: string, params: any[] = []) {
   } finally {
     client.release();
   }
+}
+
+// 料金プランの有効性をチェックする関数
+export async function hasValidPriceEntry(userId: string): Promise<boolean> {
+  const result = await query(
+    `SELECT EXISTS (
+      SELECT 1 FROM price_entries 
+      WHERE user_id = $1 
+      AND amount > 0 
+      AND stripe_url != '' 
+      AND NOT is_hidden
+    )`,
+    [userId]
+  );
+  return result.rows[0].exists;
+}
+
+// ユーザーの受付状態を更新する関数
+export async function updateUserAvailability(userId: string): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+
+    // 有効な料金プランがあるか確認
+    const hasValid = await hasValidPriceEntry(userId);
+
+    // 有効な料金プランがない場合は強制的にunavailableに設定
+    if (!hasValid) {
+      await client.query(
+        'UPDATE users SET status = $1 WHERE id = $2',
+        ['unavailable', userId]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 } 
