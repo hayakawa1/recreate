@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { debounce } from 'lodash';
 
 type PriceEntry = {
   amount: number;
@@ -17,10 +18,42 @@ export default function ProfilePage() {
   const [userStatus, setUserStatus] = useState<'available' | 'availableButHidden' | 'unavailable'>('unavailable');
   const [description, setDescription] = useState('');
   const [priceEntries, setPriceEntries] = useState<PriceEntry[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // 自動保存用の関数
+  const saveChanges = async (data: any) => {
+    setError('');
+    try {
+      const response = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData);
+      }
+
+      const result = await response.json();
+      if (result.warning) {
+        setError(result.warning);
+      } else {
+        setSuccess('保存しました');
+        setTimeout(() => setSuccess(''), 2000);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '更新に失敗しました');
+    }
+  };
+
+  // debounceされた保存関数
+  const debouncedSave = debounce(saveChanges, 1000);
 
   useEffect(() => {
     if (authStatus === 'loading') return;
@@ -74,71 +107,120 @@ export default function ProfilePage() {
     }
   }, [authStatus, session?.user?.id, router]);
 
+  // ステータス変更時の処理
+  const handleStatusChange = (newStatus: typeof userStatus) => {
+    setUserStatus(newStatus);
+    saveChanges({
+      status: newStatus,
+      description,
+      priceEntries: priceEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
+  };
+
+  // 説明文変更時の処理
+  const handleDescriptionChange = (newDescription: string) => {
+    setDescription(newDescription);
+    debouncedSave({
+      status: userStatus,
+      description: newDescription,
+      priceEntries: priceEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
+  };
+
   const handleAddPriceEntry = () => {
-    setPriceEntries([...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }]);
+    const newEntries = [...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }];
+    setPriceEntries(newEntries);
+    debouncedSave({
+      status: userStatus,
+      description,
+      priceEntries: newEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
   };
 
   const handlePriceChange = (index: number, value: number) => {
     const newEntries = [...priceEntries];
     newEntries[index] = { ...newEntries[index], amount: value };
     setPriceEntries(newEntries);
+    debouncedSave({
+      status: userStatus,
+      description,
+      priceEntries: newEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
   };
 
   const handleStripeUrlChange = (index: number, value: string) => {
     const newEntries = [...priceEntries];
     newEntries[index] = { ...newEntries[index], stripeUrl: value };
     setPriceEntries(newEntries);
+    debouncedSave({
+      status: userStatus,
+      description,
+      priceEntries: newEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
   };
 
-  const handleDescriptionChange = (index: number, value: string) => {
+  const handlePriceDescriptionChange = (index: number, value: string) => {
     const newEntries = [...priceEntries];
     newEntries[index] = { ...newEntries[index], description: value };
     setPriceEntries(newEntries);
+    debouncedSave({
+      status: userStatus,
+      description,
+      priceEntries: newEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
   };
 
   const handleVisibilityChange = (index: number) => {
     const newEntries = [...priceEntries];
     newEntries[index] = { ...newEntries[index], isHidden: !newEntries[index].isHidden };
     setPriceEntries(newEntries);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await fetch('/api/users/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: userStatus,
-          description,
-          priceEntries: priceEntries.map(entry => ({
-            title: entry.description,
-            amount: entry.amount,
-            stripe_url: entry.stripeUrl,
-            description: entry.description,
-            is_hidden: entry.isHidden
-          }))
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData || 'プロフィールの更新に失敗しました');
-      }
-
-      setSuccess('プロフィールを更新しました');
-    } catch (error) {
-      console.error('Error:', error);
-      setError(error instanceof Error ? error.message : 'プロフィールの更新に失敗しました');
-    } finally {
-      setIsSubmitting(false);
-    }
+    debouncedSave({
+      status: userStatus,
+      description,
+      priceEntries: newEntries.map(entry => ({
+        title: entry.description,
+        amount: entry.amount,
+        stripe_url: entry.stripeUrl,
+        description: entry.description,
+        is_hidden: entry.isHidden
+      }))
+    });
   };
 
   if (authStatus === 'loading' || isLoading) {
@@ -168,14 +250,14 @@ export default function ProfilePage() {
           {success}
         </div>
       )}
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700">
             ステータス
           </label>
           <select
             value={userStatus}
-            onChange={(e) => setUserStatus(e.target.value as typeof userStatus)}
+            onChange={(e) => handleStatusChange(e.target.value as typeof userStatus)}
             className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
           >
             <option value="available">リクエスト受付中</option>
@@ -191,7 +273,7 @@ export default function ProfilePage() {
           <div className="mt-1">
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => handleDescriptionChange(e.target.value)}
               rows={4}
               className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
             />
@@ -236,7 +318,7 @@ export default function ProfilePage() {
                   <label className="block text-xs text-gray-500 mb-1">説明</label>
                   <textarea
                     value={entry.description}
-                    onChange={(e) => handleDescriptionChange(index, e.target.value)}
+                    onChange={(e) => handlePriceDescriptionChange(index, e.target.value)}
                     rows={2}
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
@@ -265,19 +347,7 @@ export default function ProfilePage() {
             + 料金プランを追加
           </button>
         </div>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {isSubmitting ? '更新中...' : '更新する'}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 } 
