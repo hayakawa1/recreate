@@ -43,20 +43,21 @@ export default function ProfilePage() {
         .then((data) => {
           setUserStatus(data.status || 'unavailable');
           setDescription(data.description || '');
-          const entries = data.price_entries?.length > 0
-            ? data.price_entries.map((entry: any) => ({
-                amount: entry.amount,
-                stripeUrl: entry.stripe_url || '',
-                description: entry.description || entry.title || '',
-                isHidden: entry.is_hidden
-              }))
-            : [{ 
-                amount: 1000, 
-                stripeUrl: '', 
-                description: '',
-                isHidden: false 
-              }];
-          setPriceEntries(entries);
+          if (data.price_entries?.length > 0) {
+            setPriceEntries(data.price_entries.map((entry: any) => ({
+              amount: entry.amount,
+              stripeUrl: entry.stripe_url || '',
+              description: entry.description || entry.title || '',
+              isHidden: entry.is_hidden
+            })));
+          } else {
+            setPriceEntries([{ 
+              amount: 1000, 
+              stripeUrl: '', 
+              description: '',
+              isHidden: false 
+            }]);
+          }
         })
         .catch((error) => {
           console.error('Error:', error);
@@ -170,10 +171,11 @@ export default function ProfilePage() {
       )}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700" htmlFor="status">
             ステータス
           </label>
           <select
+            id="status"
             value={userStatus}
             onChange={(e) => setUserStatus(e.target.value as typeof userStatus)}
             className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
@@ -185,11 +187,12 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700" htmlFor="description">
             自己紹介
           </label>
           <div className="mt-1">
             <textarea
+              id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
@@ -209,8 +212,9 @@ export default function ProfilePage() {
               }`}>
                 <div className="flex items-center space-x-2">
                   <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">金額</label>
+                    <label className="block text-xs text-gray-500 mb-1" htmlFor={`amount-${index}`}>金額</label>
                     <input
+                      id={`amount-${index}`}
                       type="number"
                       min="300"
                       value={entry.amount}
@@ -233,8 +237,9 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">説明</label>
+                  <label className="block text-xs text-gray-500 mb-1" htmlFor={`description-${index}`}>説明</label>
                   <textarea
+                    id={`description-${index}`}
                     value={entry.description}
                     onChange={(e) => handleDescriptionChange(index, e.target.value)}
                     rows={2}
@@ -244,8 +249,9 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Stripe決済URL</label>
+                  <label className="block text-xs text-gray-500 mb-1" htmlFor={`stripe-url-${index}`}>Stripe決済URL</label>
                   <input
+                    id={`stripe-url-${index}`}
                     type="text"
                     value={entry.stripeUrl}
                     onChange={(e) => handleStripeUrlChange(index, e.target.value)}
