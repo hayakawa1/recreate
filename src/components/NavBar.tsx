@@ -25,7 +25,10 @@ export default function NavBar() {
           {/* ユーザーメニュー */}
           <div className="relative">
             {status === 'loading' ? (
-              <div>Loading...</div>
+              <div className="flex items-center space-x-4">
+                <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse"></div>
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+              </div>
             ) : status === 'authenticated' && session?.user ? (
               <>
                 <button
@@ -48,7 +51,14 @@ export default function NavBar() {
                 {isMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1">
                     <Link
-                      href={`/u/${session.user.id}`}
+                      href="/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      プロフィール設定
+                    </Link>
+                    <Link
+                      href={session.user.username ? `/c/${session.user.username}` : '/profile'}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setIsMenuOpen(false)}
                     >
@@ -60,13 +70,6 @@ export default function NavBar() {
                       onClick={() => setIsMenuOpen(false)}
                     >
                       リクエスト管理
-                    </Link>
-                    <Link
-                      href="/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      プロフィール管理
                     </Link>
                     <button
                       onClick={() => {

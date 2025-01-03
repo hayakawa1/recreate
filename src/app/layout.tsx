@@ -8,8 +8,8 @@ import NavBar from '@/components/NavBar';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'ReCreate',
-  description: 'クリエイターとユーザーをつなぐプラットフォーム',
+  title: 'Recreate',
+  description: 'クリエイターのための依頼管理サービス',
 };
 
 export default function RootLayout({
@@ -21,8 +21,10 @@ export default function RootLayout({
     <html lang="ja">
       <body className={inter.className}>
         <NextAuthProvider>
-          <NavBar />
-          <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
+          <div className="min-h-screen bg-gray-50">
+            <NavBar />
+            <main>{children}</main>
+          </div>
         </NextAuthProvider>
       </body>
     </html>

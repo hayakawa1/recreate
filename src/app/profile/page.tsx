@@ -4,13 +4,24 @@ import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
+type PriceEntry = {
+  amount: number;
+  stripeUrl: string;
+  description: string;
+  isHidden: boolean;
+};
+
 export default function ProfilePage() {
   const { data: session, status: authStatus } = useSession();
   const router = useRouter();
   const [userStatus, setUserStatus] = useState<'available' | 'availableButHidden' | 'unavailable'>('unavailable');
   const [introduction, setIntroduction] = useState('');
-  const [price, setPrice] = useState<number>(1000);
-  const [stripeUrl, setStripeUrl] = useState('');
+  const [priceEntries, setPriceEntries] = useState<PriceEntry[]>([{ 
+    amount: 1000, 
+    stripeUrl: '', 
+    description: '',
+    isHidden: false 
+  }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -27,17 +38,19 @@ export default function ProfilePage() {
     if (authStatus === 'authenticated' && session?.user?.id) {
       setIsLoading(true);
       fetch('/api/users/me')
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) {
-            throw new Error('プロフィールの取得に失敗しました');
+            const errorData = await res.json().catch(() => null);
+            throw new Error(errorData?.error || 'プロフィールの取得に失敗しました');
           }
           return res.json();
         })
         .then((data) => {
           setUserStatus(data.status || 'unavailable');
           setIntroduction(data.introduction || '');
-          setPrice(data.price || 1000);
-          setStripeUrl(data.stripeLink || '');
+          if (data.priceEntries && data.priceEntries.length > 0) {
+            setPriceEntries(data.priceEntries);
+          }
         })
         .catch((error) => {
           console.error('Error:', error);
@@ -49,6 +62,38 @@ export default function ProfilePage() {
     }
   }, [authStatus, session, router]);
 
+  const handleAddPriceEntry = () => {
+    setPriceEntries([...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }]);
+  };
+
+  const handleRemovePriceEntry = (index: number) => {
+    setPriceEntries(priceEntries.filter((_, i) => i !== index));
+  };
+
+  const handlePriceChange = (index: number, value: number) => {
+    const newEntries = [...priceEntries];
+    newEntries[index] = { ...newEntries[index], amount: value };
+    setPriceEntries(newEntries);
+  };
+
+  const handleStripeUrlChange = (index: number, value: string) => {
+    const newEntries = [...priceEntries];
+    newEntries[index] = { ...newEntries[index], stripeUrl: value };
+    setPriceEntries(newEntries);
+  };
+
+  const handleDescriptionChange = (index: number, value: string) => {
+    const newEntries = [...priceEntries];
+    newEntries[index] = { ...newEntries[index], description: value };
+    setPriceEntries(newEntries);
+  };
+
+  const handleVisibilityChange = (index: number) => {
+    const newEntries = [...priceEntries];
+    newEntries[index] = { ...newEntries[index], isHidden: !newEntries[index].isHidden };
+    setPriceEntries(newEntries);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -57,26 +102,31 @@ export default function ProfilePage() {
 
     try {
       const response = await fetch('/api/users/me', {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           status: userStatus,
-          introduction,
-          price,
-          stripeUrl
+          description: introduction,
+          priceEntries: priceEntries.map(entry => ({
+            title: entry.description,
+            price: entry.amount,
+            is_hidden: entry.isHidden
+          }))
         }),
       });
 
       if (!response.ok) {
-        throw new Error('プロフィールの更新に失敗しました');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'プロフィールの更新に失敗しました');
       }
 
       setSuccess('プロフィールを更新しました');
+      router.refresh();
     } catch (error) {
       console.error('Error:', error);
-      setError('プロフィールの更新に失敗しました');
+      setError(error instanceof Error ? error.message : 'プロフィールの更新に失敗しました');
     } finally {
       setIsSubmitting(false);
     }
@@ -97,7 +147,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-8">
+    <div className="max-w-2xl mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold mb-8">プロフィール設定</h1>
       {error && (
         <div className="mb-4 p-4 text-red-700 bg-red-100 rounded-md">
@@ -140,47 +190,67 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label
-            htmlFor="price"
-            className="block text-sm font-medium text-gray-700"
-          >
-            金額（最低300円）
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            金額とStripe決済URL
           </label>
-          <div className="mt-1">
-            <input
-              type="number"
-              name="price"
-              id="price"
-              min="300"
-              className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-              value={price}
-              onChange={(e) => {
-                const value = parseInt(e.target.value);
-                if (value >= 300) {
-                  setPrice(value);
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label
-            htmlFor="stripeUrl"
-            className="block text-sm font-medium text-gray-700"
-          >
-            ストライプの決済URL
-          </label>
-          <div className="mt-1">
-            <input
-              type="text"
-              name="stripeUrl"
-              id="stripeUrl"
-              className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-              value={stripeUrl}
-              onChange={(e) => setStripeUrl(e.target.value)}
-              placeholder="https://buy.stripe.com/..."
-            />
+          <div className="space-y-4">
+            {priceEntries.map((entry, index) => (
+              <div key={index} className="space-y-2 p-4 border border-gray-200 rounded-md">
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">金額</label>
+                    <input
+                      type="number"
+                      min="300"
+                      value={entry.amount}
+                      onChange={(e) => handlePriceChange(index, parseInt(e.target.value))}
+                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleVisibilityChange(index)}
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${
+                      entry.isHidden
+                        ? 'bg-gray-200 text-gray-700'
+                        : 'bg-blue-100 text-blue-700'
+                    }`}
+                  >
+                    {entry.isHidden ? '非表示' : '表示'}
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">説明</label>
+                  <textarea
+                    value={entry.description}
+                    onChange={(e) => handleDescriptionChange(index, e.target.value)}
+                    rows={2}
+                    className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    placeholder="このプランの説明を入力してください"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Stripe決済URL</label>
+                  <input
+                    type="text"
+                    value={entry.stripeUrl}
+                    onChange={(e) => handleStripeUrlChange(index, e.target.value)}
+                    placeholder="https://buy.stripe.com/..."
+                    className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={handleAddPriceEntry}
+              className="mt-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              金額とURLを追加
+            </button>
           </div>
         </div>
 

@@ -1,43 +1,76 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/prisma';
+import { pool } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    console.log('No session:', { session });
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
-  const data = await request.json();
-  console.log('Request data:', { data, sessionUserId: session.user.id });
-
   try {
-    const creator = await prisma.user.findUnique({
-      where: { id: data.creatorId },
-      select: { price: true }
-    });
-
-    if (!creator || !creator.price) {
-      return new NextResponse('Creator price not set', { status: 400 });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const work = await prisma.work.create({
-      data: {
-        description: data.description,
-        budget: creator.price,
-        status: 'requested',
-        requesterId: session.user.id,
-        creatorId: data.creatorId,
-      },
-    });
+    const data = await request.json();
+    const { description, creatorId, amount, stripeUrl } = data;
 
-    console.log('Created work:', work);
-    return NextResponse.json(work);
+    // 作成者が存在するか確認
+    const { rows: [creator] } = await pool.query(
+      'SELECT * FROM users WHERE id = $1',
+      [creatorId]
+    );
+
+    if (!creator) {
+      return NextResponse.json({ error: 'Creator not found' }, { status: 404 });
+    }
+
+    // トランザクションを開始
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // workを作成
+      const { rows: [work] } = await client.query(
+        `INSERT INTO works (id, description, creator_id, requester_id, status)
+         VALUES ($1, $2, $3, $4, 'requested')
+         RETURNING *`,
+        [crypto.randomUUID(), description, creatorId, session.user.id]
+      );
+
+      // paymentを作成
+      const { rows: [payment] } = await client.query(
+        `INSERT INTO payments (id, work_id, amount, stripe_url, is_hidden)
+         VALUES ($1, $2, $3, $4, false)
+         RETURNING *`,
+        [crypto.randomUUID(), work.id, amount, stripeUrl]
+      );
+
+      // ユーザー情報を取得
+      const { rows: [requester] } = await client.query(
+        'SELECT name, image, username FROM users WHERE id = $1',
+        [session.user.id]
+      );
+
+      const { rows: [creator] } = await client.query(
+        'SELECT name, image, username FROM users WHERE id = $1',
+        [creatorId]
+      );
+
+      await client.query('COMMIT');
+
+      return NextResponse.json({
+        ...work,
+        payments: [payment],
+        requester,
+        creator
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    console.error('Error creating work:', error);
-    return new NextResponse('Error creating work', { status: 500 });
+    console.error('Error in POST /api/works:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 
