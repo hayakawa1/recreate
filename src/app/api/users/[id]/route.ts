@@ -1,28 +1,13 @@
 import { NextResponse } from 'next/server';
-import { Pool } from 'pg';
-
-// poolをグローバルに保持
-let pool: Pool;
-
-// poolの初期化関数
-function getPool() {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
-  }
-  return pool;
-}
+import pool from '@/lib/db';
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const db = getPool();
-    
     // ユーザー情報を取得
-    const userResult = await db.query(
+    const userResult = await pool.query(
       'SELECT id, name, username, image, description, status FROM users WHERE id = $1',
       [params.id]
     );
@@ -32,7 +17,7 @@ export async function GET(
     }
 
     // 料金プランを取得
-    const priceResult = await db.query(
+    const priceResult = await pool.query(
       'SELECT id, amount, description, stripe_url, is_hidden FROM price_entries WHERE user_id = $1 ORDER BY amount',
       [params.id]
     );

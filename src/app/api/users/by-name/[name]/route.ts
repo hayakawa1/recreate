@@ -1,40 +1,36 @@
 import { NextResponse } from 'next/server';
-import { pool } from '@/lib/db';
+import pool from '@/lib/db';
 
 export async function GET(
   request: Request,
   { params }: { params: { name: string } }
 ) {
   try {
-    const { rows: [user] } = await pool.query(
-      `SELECT 
-        u.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', p.id,
-              'amount', p.amount,
-              'stripe_url', p.stripe_url,
-              'description', p.description,
-              'is_hidden', p.is_hidden
-            )
-          ) FILTER (WHERE p.id IS NOT NULL),
-          '[]'
-        ) as price_entries
-      FROM users u
-      LEFT JOIN price_entries p ON u.id = p.user_id
-      WHERE u.name = $1
-      GROUP BY u.id`,
+    // ユーザー情報を取得
+    const userResult = await pool.query(
+      'SELECT id, name, username, image, description, status FROM users WHERE name = $1',
       [params.name]
     );
 
-    if (!user) {
+    if (userResult.rows.length === 0) {
       return new NextResponse('User not found', { status: 404 });
     }
 
-    return NextResponse.json(user);
+    // 料金プランを取得
+    const priceResult = await pool.query(
+      'SELECT id, amount, description, stripe_url, is_hidden FROM price_entries WHERE user_id = $1 ORDER BY amount',
+      [userResult.rows[0].id]
+    );
+
+    // レスポンスを組み立て
+    const response = {
+      ...userResult.rows[0],
+      price_entries: priceResult.rows
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Failed to get user:', error);
+    console.error('Error:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 
