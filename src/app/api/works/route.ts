@@ -1,76 +1,40 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { pool } from '@/lib/db';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '../auth/[...nextauth]/route';
+import { sql } from '@vercel/postgres';
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { creator_id, price_entry_id, description } = await request.json();
+
+    if (!creator_id || !price_entry_id || !description) {
+      return new NextResponse('Missing required fields', { status: 400 });
     }
 
-    const data = await request.json();
-    const { description, creatorId, amount, stripeUrl } = data;
+    const result = await sql`
+      INSERT INTO works (
+        client_id,
+        creator_id,
+        price_entry_id,
+        description,
+        status
+      ) VALUES (
+        ${session.user.id},
+        ${creator_id},
+        ${price_entry_id},
+        ${description},
+        'pending'
+      ) RETURNING id
+    `;
 
-    // 作成者が存在するか確認
-    const { rows: [creator] } = await pool.query(
-      'SELECT * FROM users WHERE id = $1',
-      [creatorId]
-    );
-
-    if (!creator) {
-      return NextResponse.json({ error: 'Creator not found' }, { status: 404 });
-    }
-
-    // トランザクションを開始
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // workを作成
-      const { rows: [work] } = await client.query(
-        `INSERT INTO works (id, description, creator_id, requester_id, status)
-         VALUES ($1, $2, $3, $4, 'requested')
-         RETURNING *`,
-        [crypto.randomUUID(), description, creatorId, session.user.id]
-      );
-
-      // paymentを作成
-      const { rows: [payment] } = await client.query(
-        `INSERT INTO payments (id, work_id, amount, stripe_url, is_hidden)
-         VALUES ($1, $2, $3, $4, false)
-         RETURNING *`,
-        [crypto.randomUUID(), work.id, amount, stripeUrl]
-      );
-
-      // ユーザー情報を取得
-      const { rows: [requester] } = await client.query(
-        'SELECT name, image, username FROM users WHERE id = $1',
-        [session.user.id]
-      );
-
-      const { rows: [creator] } = await client.query(
-        'SELECT name, image, username FROM users WHERE id = $1',
-        [creatorId]
-      );
-
-      await client.query('COMMIT');
-
-      return NextResponse.json({
-        ...work,
-        payments: [payment],
-        requester,
-        creator
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    return NextResponse.json({ id: result.rows[0].id });
   } catch (error) {
-    console.error('Error in POST /api/works:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Failed to create work:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

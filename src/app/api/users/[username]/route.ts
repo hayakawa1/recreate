@@ -1,56 +1,33 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { pool } from '@/lib/db';
-import { authOptions } from '@/lib/auth';
 
 export async function GET(
   request: Request,
   { params }: { params: { username: string } }
 ) {
   try {
-    console.log('Fetching user with username:', params.username);
-
-    // ユーザーIDまたはユーザー名で検索
     const { rows: [user] } = await pool.query(
-      `SELECT u.*, json_agg(
-        CASE 
-          WHEN pe.id IS NULL THEN NULL
-          ELSE json_build_object(
-            'id', pe.id,
-            'amount', pe.price,
-            'title', pe.title,
-            'isHidden', pe.is_hidden
-          )
-        END
-      ) as price_entries
+      `SELECT 
+        u.id,
+        u.name,
+        u.username,
+        u.image,
+        u.status,
+        u.description,
+        u.stripe_link as "stripeLink"
       FROM users u
-      LEFT JOIN price_entries pe ON u.id = pe.user_id
-      WHERE LOWER(u.username) = LOWER($1)
-      GROUP BY u.id`,
+      WHERE u.username = $1`,
       [params.username]
     );
 
     if (!user) {
-      console.log('User not found for username:', params.username);
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      return new NextResponse('User not found', { status: 404 });
     }
 
-    // price_entriesがnullの場合は空配列に変換
-    if (user.price_entries[0] === null) {
-      user.price_entries = [];
-    }
-
-    console.log('User found:', user.id);
     return NextResponse.json(user);
   } catch (error) {
-    console.error('Error fetching user:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch user' },
-      { status: 500 }
-    );
+    console.error('Failed to get user:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
 

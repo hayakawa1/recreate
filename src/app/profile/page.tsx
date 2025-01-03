@@ -15,7 +15,7 @@ export default function ProfilePage() {
   const { data: session, status: authStatus } = useSession();
   const router = useRouter();
   const [userStatus, setUserStatus] = useState<'available' | 'availableButHidden' | 'unavailable'>('unavailable');
-  const [introduction, setIntroduction] = useState('');
+  const [description, setDescription] = useState('');
   const [priceEntries, setPriceEntries] = useState<PriceEntry[]>([{ 
     amount: 1000, 
     stripeUrl: '', 
@@ -47,9 +47,14 @@ export default function ProfilePage() {
         })
         .then((data) => {
           setUserStatus(data.status || 'unavailable');
-          setIntroduction(data.introduction || '');
-          if (data.priceEntries && data.priceEntries.length > 0) {
-            setPriceEntries(data.priceEntries);
+          setDescription(data.description || '');
+          if (data.price_entries && data.price_entries.length > 0) {
+            setPriceEntries(data.price_entries.map((entry: any) => ({
+              amount: entry.amount,
+              stripeUrl: entry.stripe_url,
+              description: entry.description || entry.title,
+              isHidden: entry.is_hidden
+            })));
           }
         })
         .catch((error) => {
@@ -66,8 +71,10 @@ export default function ProfilePage() {
     setPriceEntries([...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }]);
   };
 
-  const handleRemovePriceEntry = (index: number) => {
-    setPriceEntries(priceEntries.filter((_, i) => i !== index));
+  const handleHidePriceEntry = (index: number) => {
+    const newPriceEntries = [...priceEntries];
+    newPriceEntries[index].is_hidden = true;
+    setPriceEntries(newPriceEntries);
   };
 
   const handlePriceChange = (index: number, value: number) => {
@@ -108,10 +115,12 @@ export default function ProfilePage() {
         },
         body: JSON.stringify({
           status: userStatus,
-          description: introduction,
+          description,
           priceEntries: priceEntries.map(entry => ({
             title: entry.description,
-            price: entry.amount,
+            amount: entry.amount,
+            stripe_url: entry.stripeUrl,
+            description: entry.description,
             is_hidden: entry.isHidden
           }))
         }),
@@ -123,7 +132,6 @@ export default function ProfilePage() {
       }
 
       setSuccess('プロフィールを更新しました');
-      router.refresh();
     } catch (error) {
       console.error('Error:', error);
       setError(error instanceof Error ? error.message : 'プロフィールの更新に失敗しました');
@@ -181,8 +189,8 @@ export default function ProfilePage() {
           </label>
           <div className="mt-1">
             <textarea
-              value={introduction}
-              onChange={(e) => setIntroduction(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               rows={4}
               className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
             />
@@ -195,7 +203,9 @@ export default function ProfilePage() {
           </label>
           <div className="space-y-4">
             {priceEntries.map((entry, index) => (
-              <div key={index} className="space-y-2 p-4 border border-gray-200 rounded-md">
+              <div key={index} className={`space-y-2 p-4 border border-gray-200 rounded-md ${
+                entry.isHidden ? 'bg-gray-50' : ''
+              }`}>
                 <div className="flex items-center space-x-2">
                   <div className="flex-1">
                     <label className="block text-xs text-gray-500 mb-1">金額</label>
@@ -204,20 +214,31 @@ export default function ProfilePage() {
                       min="300"
                       value={entry.amount}
                       onChange={(e) => handlePriceChange(index, parseInt(e.target.value))}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                        entry.isHidden ? 'bg-gray-100' : ''
+                      }`}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => handleVisibilityChange(index)}
                     className={`px-3 py-2 text-sm font-medium rounded-md ${
-                      entry.isHidden
-                        ? 'bg-gray-200 text-gray-700'
-                        : 'bg-blue-100 text-blue-700'
+                      entry.isHidden 
+                        ? 'bg-red-100 text-red-700' 
+                        : 'bg-green-100 text-green-700'
                     }`}
                   >
-                    {entry.isHidden ? '非表示' : '表示'}
+                    {entry.isHidden ? '非公開' : '公開中'}
                   </button>
+                  {priceEntries.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleHidePriceEntry(index)}
+                      className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700"
+                    >
+                      非公開
+                    </button>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">説明</label>
@@ -225,7 +246,9 @@ export default function ProfilePage() {
                     value={entry.description}
                     onChange={(e) => handleDescriptionChange(index, e.target.value)}
                     rows={2}
-                    className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                      entry.isHidden ? 'bg-gray-100' : ''
+                    }`}
                     placeholder="このプランの説明を入力してください"
                   />
                 </div>
@@ -236,7 +259,9 @@ export default function ProfilePage() {
                     value={entry.stripeUrl}
                     onChange={(e) => handleStripeUrlChange(index, e.target.value)}
                     placeholder="https://buy.stripe.com/..."
-                    className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                    className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                      entry.isHidden ? 'bg-gray-100' : ''
+                    }`}
                   />
                 </div>
               </div>
@@ -244,7 +269,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={handleAddPriceEntry}
-              className="mt-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="mt-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
             >
               <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -254,14 +279,18 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            {isSubmitting ? '保存中...' : '保存する'}
-          </button>
+        <div className="pt-5">
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isSubmitting ? '更新中...' : '更新する'}
+            </button>
+          </div>
         </div>
       </form>
     </div>

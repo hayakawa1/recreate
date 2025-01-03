@@ -12,7 +12,25 @@ export async function GET() {
 
   try {
     const { rows: [user] } = await pool.query(
-      'SELECT * FROM users WHERE id = $1',
+      `SELECT 
+        u.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', p.id,
+              'title', p.title,
+              'amount', p.amount,
+              'stripe_url', p.stripe_url,
+              'description', p.description,
+              'is_hidden', p.is_hidden
+            )
+          ) FILTER (WHERE p.id IS NOT NULL),
+          '[]'
+        ) as price_entries
+      FROM users u
+      LEFT JOIN price_entries p ON u.id = p.user_id
+      WHERE u.id = $1
+      GROUP BY u.id`,
       [session.user.id]
     )
 
@@ -20,15 +38,7 @@ export async function GET() {
       return new NextResponse('User not found', { status: 404 })
     }
 
-    const { rows: priceEntries } = await pool.query(
-      'SELECT id, user_id, title, price as amount, is_hidden as "isHidden" FROM price_entries WHERE user_id = $1',
-      [user.id]
-    )
-
-    return NextResponse.json({
-      ...user,
-      priceEntries
-    })
+    return NextResponse.json(user)
   } catch (error) {
     console.error('Failed to get user:', error)
     return new NextResponse('Internal Server Error', { status: 500 })
@@ -46,50 +56,52 @@ export async function PUT(req: Request) {
     const { status, description, priceEntries } = body
 
     // トランザクションを開始
-    await pool.query('BEGIN')
-
+    const client = await pool.connect()
     try {
+      await client.query('BEGIN')
+
       // ユーザー情報を更新
-      const { rows: [user] } = await pool.query(
+      const { rows: [user] } = await client.query(
         'UPDATE users SET status = $1, description = $2 WHERE id = $3 RETURNING *',
         [status, description, session.user.id]
       )
 
-      // 既存のprice_entriesを削除
-      await pool.query(
+      // 既存の価格設定を削除
+      await client.query(
         'DELETE FROM price_entries WHERE user_id = $1',
         [session.user.id]
       )
 
-      // 新しいprice_entriesを挿入
+      // 新しい価格設定を追加
       if (priceEntries && priceEntries.length > 0) {
-        const values = priceEntries.map((entry: any, index: number) => 
-          `($${index * 4 + 1}, $${index * 4 + 2}, $${index * 4 + 3}, $${index * 4 + 4}, $${index * 4 + 5})`
-        ).join(', ')
-        
-        const params: any[] = []
-        priceEntries.forEach((entry: any) => {
-          params.push(
-            crypto.randomUUID(),
-            session.user.id,
-            entry.title,
-            entry.price,
-            entry.is_hidden
-          )
-        })
+        const values = priceEntries.map(entry => [
+          crypto.randomUUID(),
+          session.user.id,
+          entry.title,
+          entry.amount,
+          entry.stripe_url,
+          entry.description,
+          entry.is_hidden
+        ])
 
-        await pool.query(
-          `INSERT INTO price_entries (id, user_id, title, price, is_hidden) VALUES ${values}`,
-          params
+        const placeholders = values.map((_, i) => 
+          `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`
+        ).join(', ')
+
+        await client.query(
+          `INSERT INTO price_entries (id, user_id, title, amount, stripe_url, description, is_hidden)
+           VALUES ${placeholders}`,
+          values.flat()
         )
       }
 
-      await pool.query('COMMIT')
-
+      await client.query('COMMIT')
       return NextResponse.json(user)
     } catch (error) {
-      await pool.query('ROLLBACK')
+      await client.query('ROLLBACK')
       throw error
+    } finally {
+      client.release()
     }
   } catch (error) {
     console.error('Failed to update user:', error)
