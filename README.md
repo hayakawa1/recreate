@@ -50,35 +50,73 @@ Recreateは、クリエイターと依頼者をつなぐプラットフォーム
 ### インフラ
 - Vercel (デプロイ)
 - Vercel Postgres (データベース)
+- Cloudflare R2 (ファイルストレージ)
 
 ## データベース設計
 
 ### users テーブル
-- id: UUID (PK)
-- name: TEXT
-- username: TEXT
-- image: TEXT
-- description: TEXT
-- status: TEXT ('available', 'availableButHidden', 'unavailable')
-- created_at: TIMESTAMP
-- updated_at: TIMESTAMP
+- id: UUID (PK) - ユーザーの一意識別子
+- name: TEXT - ユーザー名
+- username: TEXT UNIQUE - ユーザーのユニークな識別子
+- image: TEXT - プロフィール画像のURL
+- twitter_id: TEXT UNIQUE - TwitterのID
+- status: TEXT - ユーザーの状態 ('available', 'availableButHidden', 'unavailable')
+- description: TEXT - 自己紹介文
+- created_at: TIMESTAMP WITH TIME ZONE - 作成日時
+- updated_at: TIMESTAMP WITH TIME ZONE - 更新日時
 
 ### price_entries テーブル
-- id: UUID (PK)
-- user_id: UUID (FK -> users.id)
-- amount: INTEGER
-- description: TEXT
-- stripe_url: TEXT
-- is_hidden: BOOLEAN
-- created_at: TIMESTAMP
-- updated_at: TIMESTAMP
+- id: UUID (PK) - 料金プランの一意識別子
+- user_id: UUID (FK -> users.id) - プラン作成者のID
+- title: TEXT - プランのタイトル
+- amount: INTEGER - 金額
+- description: TEXT - プランの説明
+- stripe_url: TEXT - Stripe決済用のURL
+- is_hidden: BOOLEAN - 非表示フラグ
+- created_at: TIMESTAMP WITH TIME ZONE - 作成日時
+- updated_at: TIMESTAMP WITH TIME ZONE - 更新日時
 
 ### works テーブル
-- id: UUID (PK)
-- requester_id: UUID (FK -> users.id)
-- creator_id: UUID (FK -> users.id)
-- price_entry_id: UUID (FK -> price_entries.id)
-- message: TEXT
-- status: TEXT ('requested', 'rejected', 'delivered', 'paid')
-- created_at: TIMESTAMP
-- updated_at: TIMESTAMP 
+- id: UUID (PK) - 依頼の一意識別子
+- sequential_id: SERIAL - 連番ID
+- requester_id: UUID (FK -> users.id) - 依頼者のID
+- creator_id: UUID (FK -> users.id) - クリエイターのID
+- price_entry_id: UUID (FK -> price_entries.id) - 選択された料金プランのID
+- status: TEXT - 依頼の状態 ('requested', 'rejected', 'delivered', 'paid')
+- message: TEXT - 依頼メッセージ
+- amount: INTEGER - 金額
+- stripe_url: TEXT - Stripe決済用のURL
+- file_key: TEXT - 納品ファイルのストレージキー
+- created_at: TIMESTAMP WITH TIME ZONE - 作成日時
+- updated_at: TIMESTAMP WITH TIME ZONE - 更新日時
+
+## API仕様
+
+### 認証関連
+- GET /api/auth/session - セッション情報の取得
+- POST /api/auth/signin - サインイン
+- POST /api/auth/signout - サインアウト
+
+### ユーザー関連
+- GET /api/users/me - 自分のプロフィール情報の取得
+- PUT /api/users/me - プロフィール情報の更新
+- GET /api/users/[id] - 特定ユーザーの情報取得
+- GET /api/users/[id]/stats - ユーザーの統計情報取得
+
+### 依頼関連
+- POST /api/works - 新規依頼の作成
+- GET /api/works/sent - 送信した依頼一覧の取得
+- GET /api/works/received - 受信した依頼一覧の取得
+- POST /api/works/by-id/[id]/deliver - 依頼の納品
+- POST /api/works/by-id/[id]/paid - 支払い完了の登録
+
+## 環境変数
+```
+DATABASE_URL=postgresql://username:password@host:5432/dbname
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key
+TWITTER_CLIENT_ID=your-twitter-client-id
+TWITTER_CLIENT_SECRET=your-twitter-client-secret
+R2_ACCESS_KEY_ID=your-r2-access-key
+R2_SECRET_ACCESS_KEY=your-r2-secret-key
+R2_BUCKET_NAME=your-bucket-name 
