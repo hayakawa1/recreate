@@ -104,6 +104,11 @@ export async function PUT(req: Request) {
       // 有効な料金プランがない場合は強制的にunavailableに設定
       const newStatus = !hasValidPlan ? 'unavailable' : status;
 
+      // 受付状態のバリデーション
+      if (!hasValidPlan && (status === 'available' || status === 'availableButHidden')) {
+        return new NextResponse('有効な料金プランが設定されていないため、受付開始できません。', { status: 400 });
+      }
+
       // ユーザー情報を更新
       const { rows: [user] } = await client.query(
         'UPDATE users SET status = $1, description = $2 WHERE id = $3 RETURNING *',
