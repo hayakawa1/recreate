@@ -82,6 +82,8 @@ export default function ProfilePage() {
       setError(error instanceof Error ? error.message : 'ステータスの更新に失敗しました');
       // エラーが発生した場合は元のステータスに戻す
       setUserStatus(userStatus);
+      // エラーメッセージを3秒後に消す
+      setTimeout(() => setError(''), 3000);
     }
   };
 
