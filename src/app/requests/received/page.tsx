@@ -56,7 +56,7 @@ export default function ReceivedRequestsPage() {
   // 統計情報を計算（filteredWorksを使用）
   const stats = {
     total: filteredWorks.length,
-    requested: filteredWorks.filter(w => w.status === 'requested').length,
+    requested: filteredWorks.filter(w => w.status === 'pending').length,
     delivered: filteredWorks.filter(w => w.status === 'delivered').length,
     paid: filteredWorks.filter(w => w.status === 'paid').length,
     rejected: filteredWorks.filter(w => w.status === 'rejected').length,
@@ -257,7 +257,7 @@ export default function ReceivedRequestsPage() {
                     <span className="text-sm text-gray-500">#{work.sequentialId}</span>
                     <span
                       className={`px-2 py-1 text-sm rounded-full ${
-                        work.status === 'requested'
+                        work.status === 'pending'
                           ? 'bg-blue-100 text-blue-800'
                           : work.status === 'delivered'
                           ? 'bg-green-100 text-green-800'
@@ -268,7 +268,7 @@ export default function ReceivedRequestsPage() {
                           : 'bg-gray-100 text-gray-800'
                       }`}
                     >
-                      {work.status === 'requested'
+                      {work.status === 'pending'
                         ? 'リクエスト中'
                         : work.status === 'delivered'
                         ? '納品済み'
@@ -285,7 +285,7 @@ export default function ReceivedRequestsPage() {
                       {work.description}
                     </p>
                   </div>
-                  {work.status === 'requested' && (
+                  {work.status === 'pending' && (
                     <div className="mt-4">
                       <button
                         onClick={() => handleDeliver(work.id)}

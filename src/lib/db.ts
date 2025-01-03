@@ -19,13 +19,16 @@ pool.query('SELECT NOW()', (err, res) => {
   }
 });
 
+export default pool;
+
 export async function sql(strings: TemplateStringsArray, ...values: any[]) {
   try {
-    let text = strings[0];
-    let paramIndex = 1;
-    for (let i = 1; i < strings.length; i++) {
-      text += `$${paramIndex}` + strings[i];
-      paramIndex++;
+    let text = "";
+    for (let i = 0; i < strings.length; i++) {
+      text += strings[i];
+      if (i < values.length) {
+        text += `$${i + 1}`; // $1, $2, ... の形式でパラメータバインド
+      }
     }
     console.log('Executing SQL:', text, 'with values:', values);
     const result = await pool.query(text, values);
@@ -34,6 +37,4 @@ export async function sql(strings: TemplateStringsArray, ...values: any[]) {
     console.error('SQL execution error:', error);
     throw error;
   }
-}
-
-export default pool; 
+} 

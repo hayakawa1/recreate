@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         price_entry_id,
         amount,
         status
-      ) VALUES ($1::text, $2::text, $3, $4, $5, 'requested') 
+      ) VALUES ($1::text, $2::text, $3, $4, $5, 'pending') 
       RETURNING id, description, status, amount`,
       [session.user.id, userId, message, priceId, amount]
     );

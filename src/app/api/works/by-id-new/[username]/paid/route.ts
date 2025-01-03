@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { username: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,15 +16,15 @@ export async function POST(
     // ワークを取得
     const { rows: [work] } = await pool.query(
       'SELECT * FROM works WHERE id = $1',
-      [params.username]
+      [params.id]
     );
 
     if (!work) {
       return NextResponse.json({ error: 'Work not found' }, { status: 404 });
     }
 
-    // 権限チェック（リクエスト送信者のみ支払い完了可能）
-    if (work.requester_id !== session.user.id) {
+    // 権限チェック（依頼者のみ支払い可能）
+    if (work.user_id !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -39,7 +39,7 @@ export async function POST(
          SET status = 'paid'
          WHERE id = $1
          RETURNING *`,
-        [params.username]
+        [params.id]
       );
 
       await client.query('COMMIT');
@@ -52,7 +52,7 @@ export async function POST(
       client.release();
     }
   } catch (error) {
-    console.error('Error in POST /api/works/[username]/paid:', error);
+    console.error('Error in POST /api/works/[id]/paid:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

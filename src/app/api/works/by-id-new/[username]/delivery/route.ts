@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { username: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,17 +16,20 @@ export async function POST(
     // ワークを取得
     const { rows: [work] } = await pool.query(
       'SELECT * FROM works WHERE id = $1',
-      [params.username]
+      [params.id]
     );
 
     if (!work) {
       return NextResponse.json({ error: 'Work not found' }, { status: 404 });
     }
 
-    // 権限チェック（作成者のみ拒否可能）
+    // 権限チェック（作成者のみ納品可能）
     if (work.creator_id !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const data = await request.json();
+    const { deliveryUrl } = data;
 
     // トランザクションを開始
     const client = await pool.connect();
@@ -36,10 +39,10 @@ export async function POST(
       // ワークを更新
       const { rows: [updatedWork] } = await client.query(
         `UPDATE works 
-         SET status = 'rejected'
-         WHERE id = $1
+         SET status = 'delivered', delivery_url = $1
+         WHERE id = $2
          RETURNING *`,
-        [params.username]
+        [deliveryUrl, params.id]
       );
 
       await client.query('COMMIT');
@@ -52,7 +55,7 @@ export async function POST(
       client.release();
     }
   } catch (error) {
-    console.error('Error in POST /api/works/[username]/reject:', error);
+    console.error('Error in POST /api/works/[id]/delivery:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

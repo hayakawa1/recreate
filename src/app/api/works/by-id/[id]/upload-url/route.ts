@@ -29,7 +29,7 @@ export async function GET(
       SELECT * FROM works 
       WHERE id = ${params.id} 
       AND creator_id = ${session.user.id}
-      AND status = 'requested'
+      AND status = 'pending'
     `;
 
     if (works.length === 0) {
