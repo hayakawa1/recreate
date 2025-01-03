@@ -1,57 +1,57 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { pool } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
+import { Pool } from 'pg';
 
-export async function GET() {
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    console.log('Session:', session?.user?.id);
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { rows: works } = await pool.query(
+    const result = await pool.query(
       `SELECT 
-        w.*,
-        json_build_object(
-          'name', r.name,
-          'image', r.image,
-          'username', r.username
-        ) as requester,
-        json_build_object(
-          'name', c.name,
-          'image', c.image,
-          'username', c.username
-        ) as creator,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', p.id,
-              'amount', p.amount,
-              'stripeUrl', p.stripe_url,
-              'isHidden', p.is_hidden
-            )
-          ) FILTER (WHERE p.id IS NOT NULL),
-          '[]'
-        ) as payments
-      FROM works w
-      LEFT JOIN users r ON w.requester_id = r.id
-      LEFT JOIN users c ON w.creator_id = c.id
-      LEFT JOIN payments p ON w.id = p.work_id
-      WHERE w.creator_id = $1
-      GROUP BY w.id, r.name, r.image, r.username, c.name, c.image, c.username
-      ORDER BY w.created_at DESC`,
+        w.id,
+        w.sequential_id,
+        w.description,
+        w.status,
+        w.amount,
+        w.created_at,
+        u.name as requester_name,
+        u.image as requester_image,
+        u.username as requester_username
+       FROM works w
+       JOIN users u ON w.requester_id::text = u.id::text
+       WHERE w.creator_id::text = $1::text
+       ORDER BY w.created_at DESC`,
       [session.user.id]
     );
 
+    console.log('Session:', session.user.id);
+    console.log('Found works:', result.rows);
+
+    const works = result.rows.map(row => ({
+      id: row.id,
+      sequentialId: row.sequential_id,
+      description: row.description,
+      status: row.status,
+      amount: row.amount,
+      requester: {
+        name: row.requester_name,
+        image: row.requester_image,
+        username: row.requester_username,
+      },
+    }));
+
     return NextResponse.json(works);
   } catch (error) {
-    console.error('Error in GET /api/works/received:', error);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
+    console.error('Error fetching received works:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 
