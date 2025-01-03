@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 
@@ -23,6 +23,7 @@ export default function RequestPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,6 +40,12 @@ export default function RequestPage() {
         }
         const data = await response.json();
         setUser(data);
+        
+        // URLからプランIDを取得して設定
+        const planId = searchParams.get('plan');
+        if (planId) {
+          setSelectedPrice(planId);
+        }
       } catch (error) {
         setError(error instanceof Error ? error.message : 'エラーが発生しました');
       } finally {
@@ -49,7 +56,7 @@ export default function RequestPage() {
     if (params.name) {
       fetchUser();
     }
-  }, [params.name]);
+  }, [params.name, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,12 +185,18 @@ export default function RequestPage() {
           />
         </div>
 
+        {!session && (
+          <div className="text-yellow-700 bg-yellow-100 p-4 rounded-md">
+            リクエストを送信するにはログインが必要です
+          </div>
+        )}
+
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={isSubmitting || !selectedPrice || !description}
+            disabled={isSubmitting || !session || !selectedPrice || !description}
             className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-              (isSubmitting || !selectedPrice || !description) ? 'opacity-50 cursor-not-allowed' : ''
+              (isSubmitting || !session || !selectedPrice || !description) ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
             {isSubmitting ? '送信中...' : 'リクエストを送信'}

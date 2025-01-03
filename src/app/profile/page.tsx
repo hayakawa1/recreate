@@ -71,12 +71,6 @@ export default function ProfilePage() {
     setPriceEntries([...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }]);
   };
 
-  const handleHidePriceEntry = (index: number) => {
-    const newPriceEntries = [...priceEntries];
-    newPriceEntries[index].is_hidden = true;
-    setPriceEntries(newPriceEntries);
-  };
-
   const handlePriceChange = (index: number, value: number) => {
     const newEntries = [...priceEntries];
     newEntries[index] = { ...newEntries[index], amount: value };
@@ -230,15 +224,6 @@ export default function ProfilePage() {
                   >
                     {entry.isHidden ? '非公開' : '公開中'}
                   </button>
-                  {priceEntries.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleHidePriceEntry(index)}
-                      className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700"
-                    >
-                      非公開
-                    </button>
-                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">説明</label>
@@ -249,7 +234,6 @@ export default function ProfilePage() {
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
                     }`}
-                    placeholder="このプランの説明を入力してください"
                   />
                 </div>
                 <div>
@@ -258,7 +242,6 @@ export default function ProfilePage() {
                     type="text"
                     value={entry.stripeUrl}
                     onChange={(e) => handleStripeUrlChange(index, e.target.value)}
-                    placeholder="https://buy.stripe.com/..."
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
                     }`}
@@ -266,31 +249,26 @@ export default function ProfilePage() {
                 </div>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={handleAddPriceEntry}
-              className="mt-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              金額とURLを追加
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={handleAddPriceEntry}
+            className="mt-4 text-sm text-blue-600 hover:text-blue-500"
+          >
+            + 料金プランを追加
+          </button>
         </div>
 
-        <div className="pt-5">
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {isSubmitting ? '更新中...' : '更新する'}
-            </button>
-          </div>
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isSubmitting ? '更新中...' : '更新する'}
+          </button>
         </div>
       </form>
     </div>

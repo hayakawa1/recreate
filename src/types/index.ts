@@ -1,0 +1,7 @@
+export enum WorkStatus {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED'
+} 

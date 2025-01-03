@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverActions: true,
+  },
   images: {
-    domains: ['abs.twimg.com', 'pbs.twimg.com'],
-  }
-};
+    domains: ['pbs.twimg.com'],
+  },
+}
 
-module.exports = nextConfig; 
+module.exports = nextConfig 

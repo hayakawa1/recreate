@@ -100,7 +100,19 @@ export default function CreatorPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
               {user.username && (
-                <p className="text-gray-500">@{user.username}</p>
+                <div className="flex items-center space-x-2">
+                  <p className="text-gray-500">@{user.username}</p>
+                  <a
+                    href={`https://twitter.com/${user.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-600"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                  </a>
+                </div>
               )}
             </div>
           </div>
@@ -123,7 +135,7 @@ export default function CreatorPage() {
                       <div className="text-sm text-gray-500 mb-4">{price.description}</div>
                     )}
                     <a
-                      href={`/c/${user.name}`}
+                      href={`/c/${user.name}?plan=${price.id}`}
                       className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       リクエストを送る
