@@ -69,9 +69,9 @@ export async function PUT(req: Request) {
     try {
       await client.query('BEGIN')
 
-      // 既存の価格設定を非表示に設定
+      // 既存の料金設定を削除
       await client.query(
-        'UPDATE price_entries SET is_hidden = true WHERE user_id = $1',
+        'DELETE FROM price_entries WHERE user_id = $1',
         [session.user.id]
       )
 
