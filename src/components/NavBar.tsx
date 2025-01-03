@@ -58,7 +58,7 @@ export default function NavBar() {
                       プロフィール設定
                     </Link>
                     <Link
-                      href={session.user.name ? `/u/${session.user.name}` : '/profile'}
+                      href={session.user.id ? `/users/${session.user.id}` : '/profile'}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setIsMenuOpen(false)}
                     >
