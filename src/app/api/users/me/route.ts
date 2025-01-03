@@ -61,77 +61,55 @@ export async function PUT(req: Request) {
 
   try {
     const body = await req.json()
-    const { status, description, priceEntries } = body
+    const { status, description } = body
 
     const pool = getPool();
-    // トランザクションを開始
-    const client = await pool.connect()
-    try {
-      await client.query('BEGIN')
 
-      // 既存の料金設定を削除
-      await client.query(
-        'DELETE FROM price_entries WHERE user_id = $1',
-        [session.user.id]
-      )
-
-      // 新しい価格設定を追加
-      if (priceEntries && priceEntries.length > 0) {
-        const values = priceEntries.map(entry => [
-          crypto.randomUUID(),
-          session.user.id,
-          entry.title || entry.description,
-          entry.amount,
-          entry.stripe_url || '',
-          entry.description || '',
-          entry.isHidden ?? false
-        ])
-
-        const placeholders = values.map((_, i) => 
-          `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7})`
-        ).join(', ')
-
-        await client.query(
-          `INSERT INTO price_entries (id, user_id, title, amount, stripe_url, description, is_hidden)
-           VALUES ${placeholders}`,
-          values.flat()
-        )
-      }
-
-      // 有効な料金プランの存在チェック
+    // ステータス変更時のみ有効性チェック
+    if (status !== undefined) {
       const hasValidPlan = await hasValidPriceEntry(session.user.id);
-
-      // 有効な料金プランがない場合は強制的にunavailableに設定
-      const newStatus = !hasValidPlan ? 'unavailable' : status;
-
-      // 受付状態のバリデーション
       if (!hasValidPlan && (status === 'available' || status === 'availableButHidden')) {
         return new NextResponse('有効な料金プランが設定されていないため、受付開始できません。', { status: 400 });
       }
-
-      // ユーザー情報を更新
-      const { rows: [user] } = await client.query(
-        'UPDATE users SET status = $1, description = $2 WHERE id = $3 RETURNING *',
-        [newStatus, description, session.user.id]
-      )
-
-      await client.query('COMMIT')
-
-      // レスポンスに警告メッセージを追加
-      const response = {
-        ...user,
-        hasValidPlan,
-        canAcceptRequests: hasValidPlan && (newStatus === 'available' || newStatus === 'availableButHidden'),
-        warning: !hasValidPlan ? '有効な料金プランが設定されていないため、受付停止状態に設定されました。' : undefined
-      };
-
-      return NextResponse.json(response)
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
     }
+
+    // ユーザー情報を更新
+    const updateFields = [];
+    const values = [];
+    let valueIndex = 1;
+
+    if (status !== undefined) {
+      updateFields.push(`status = $${valueIndex}`);
+      values.push(status);
+      valueIndex++;
+    }
+
+    if (description !== undefined) {
+      updateFields.push(`description = $${valueIndex}`);
+      values.push(description);
+      valueIndex++;
+    }
+
+    if (updateFields.length === 0) {
+      return new NextResponse('更新する項目がありません。', { status: 400 });
+    }
+
+    values.push(session.user.id);
+    const { rows: [user] } = await pool.query(
+      `UPDATE users 
+       SET ${updateFields.join(', ')} 
+       WHERE id = $${valueIndex}
+       RETURNING *`,
+      values
+    );
+
+    const hasValidPlan = await hasValidPriceEntry(session.user.id);
+    return NextResponse.json({
+      ...user,
+      hasValidPlan,
+      canAcceptRequests: hasValidPlan && (user.status === 'available' || user.status === 'availableButHidden')
+    });
+
   } catch (error) {
     console.error('Failed to update user:', error)
     return new NextResponse('プロフィールの更新に失敗しました', { status: 500 })

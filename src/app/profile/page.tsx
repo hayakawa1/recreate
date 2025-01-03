@@ -52,6 +52,62 @@ export default function ProfilePage() {
     }
   };
 
+  // 料金プラン保存用の関数
+  const savePriceEntry = async (entry: PriceEntry & { id?: string }) => {
+    setError('');
+    try {
+      const response = await fetch('/api/users/me/price-entries', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: entry.id,
+          amount: entry.amount,
+          stripe_url: entry.stripeUrl,
+          description: entry.description,
+          is_hidden: entry.isHidden
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData);
+      }
+
+      const result = await response.json();
+      setSuccess('保存しました');
+      setTimeout(() => setSuccess(''), 2000);
+      return result;
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '更新に失敗しました');
+      throw error;
+    }
+  };
+
+  // 料金プラン削除用の関数
+  const deletePriceEntry = async (id: string) => {
+    setError('');
+    try {
+      const response = await fetch(`/api/users/me/price-entries?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData);
+      }
+
+      setSuccess('削除しました');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '削除に失敗しました');
+      throw error;
+    }
+  };
+
   // debounceされた保存関数
   const debouncedSave = debounce(saveChanges, 1000);
 
@@ -111,32 +167,22 @@ export default function ProfilePage() {
   const handleStatusChange = (newStatus: typeof userStatus) => {
     setUserStatus(newStatus);
     saveChanges({
-      status: newStatus,
-      description,
-      priceEntries: priceEntries.map(entry => ({
-        title: entry.description,
-        amount: entry.amount,
-        stripe_url: entry.stripeUrl,
-        description: entry.description,
-        is_hidden: entry.isHidden
-      }))
+      status: newStatus
     });
   };
 
   // 説明文変更時の処理
   const handleDescriptionChange = (newDescription: string) => {
     setDescription(newDescription);
-    // 自己紹介は即時保存
     saveChanges({
-      status: userStatus,
-      description: newDescription,
-      priceEntries: priceEntries
+      description: newDescription
     });
   };
 
   const handleAddPriceEntry = () => {
-    const newEntries = [...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }];
-    setPriceEntries(newEntries);
+    const newEntry = { amount: 1000, stripeUrl: '', description: '', isHidden: false };
+    setPriceEntries([...priceEntries, newEntry]);
+    savePriceEntry(newEntry);
   };
 
   const handlePriceChange = (index: number, value: number) => {
@@ -145,18 +191,17 @@ export default function ProfilePage() {
     setPriceEntries(newEntries);
   };
 
-  const handlePriceBlur = () => {
-    saveChanges({
-      status: userStatus,
-      description,
-      priceEntries: priceEntries.map(entry => ({
-        title: entry.description,
-        amount: entry.amount,
-        stripe_url: entry.stripeUrl,
-        description: entry.description,
-        is_hidden: entry.isHidden
-      }))
-    });
+  const handlePriceBlur = async (index: number) => {
+    try {
+      const entry = priceEntries[index];
+      const result = await savePriceEntry(entry);
+      // IDを更新
+      const newEntries = [...priceEntries];
+      newEntries[index] = { ...entry, id: result.id };
+      setPriceEntries(newEntries);
+    } catch (error) {
+      // エラーは既に処理済み
+    }
   };
 
   const handleStripeUrlChange = (index: number, value: string) => {
@@ -171,22 +216,15 @@ export default function ProfilePage() {
     setPriceEntries(newEntries);
   };
 
-  const handleVisibilityChange = (index: number) => {
+  const handleVisibilityChange = async (index: number) => {
     const newEntries = [...priceEntries];
     newEntries[index] = { ...newEntries[index], isHidden: !newEntries[index].isHidden };
     setPriceEntries(newEntries);
-    // 表示/非表示は即時保存
-    saveChanges({
-      status: userStatus,
-      description,
-      priceEntries: newEntries.map(entry => ({
-        title: entry.description,
-        amount: entry.amount,
-        stripe_url: entry.stripeUrl,
-        description: entry.description,
-        is_hidden: entry.isHidden
-      }))
-    });
+    try {
+      await savePriceEntry(newEntries[index]);
+    } catch (error) {
+      // エラーは既に処理済み
+    }
   };
 
   if (authStatus === 'loading' || isLoading) {
@@ -263,7 +301,7 @@ export default function ProfilePage() {
                       min="300"
                       value={entry.amount}
                       onChange={(e) => handlePriceChange(index, parseInt(e.target.value))}
-                      onBlur={handlePriceBlur}
+                      onBlur={() => handlePriceBlur(index)}
                       className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                         entry.isHidden ? 'bg-gray-100' : ''
                       }`}
@@ -286,7 +324,7 @@ export default function ProfilePage() {
                   <textarea
                     value={entry.description}
                     onChange={(e) => handlePriceDescriptionChange(index, e.target.value)}
-                    onBlur={handlePriceBlur}
+                    onBlur={() => handlePriceBlur(index)}
                     rows={2}
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
@@ -299,7 +337,7 @@ export default function ProfilePage() {
                     type="text"
                     value={entry.stripeUrl}
                     onChange={(e) => handleStripeUrlChange(index, e.target.value)}
-                    onBlur={handlePriceBlur}
+                    onBlur={() => handlePriceBlur(index)}
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
                     }`}
