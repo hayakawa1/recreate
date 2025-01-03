@@ -73,7 +73,7 @@ export const authOptions: NextAuthOptions = {
           await pool.query(
             `INSERT INTO users (id, twitter_id, username, name, image, status)
             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [crypto.randomUUID(), twitter_id, username, name, user.image, 'available']
+            [crypto.randomUUID(), twitter_id, username, name, user.image, 'unavailable']
           );
         } else {
           // 既存ユーザーの更新（ユーザー名が変更されている可能性がある）
