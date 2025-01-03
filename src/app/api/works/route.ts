@@ -16,19 +16,19 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { creatorName, description, priceId, amount } = body;
+    const { userId, priceId, message } = body;
 
-    // クリエイターのIDを取得
-    const creatorResult = await pool.query(
-      'SELECT id FROM users WHERE name = $1',
-      [creatorName]
+    // 料金プランの情報を取得
+    const priceResult = await pool.query(
+      'SELECT amount FROM price_entries WHERE id = $1',
+      [priceId]
     );
 
-    if (creatorResult.rows.length === 0) {
-      return NextResponse.json({ error: 'Creator not found' }, { status: 404 });
+    if (priceResult.rows.length === 0) {
+      return NextResponse.json({ error: 'Price plan not found' }, { status: 404 });
     }
 
-    const creatorId = creatorResult.rows[0].id;
+    const amount = priceResult.rows[0].amount;
 
     // リクエストを作成
     const result = await pool.query(
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         status
       ) VALUES ($1::text, $2::text, $3, $4, $5, 'requested') 
       RETURNING id, description, status, amount`,
-      [session.user.id, creatorId, description, priceId, amount]
+      [session.user.id, userId, message, priceId, amount]
     );
 
     const work = result.rows[0];
@@ -50,9 +50,6 @@ export async function POST(request: Request) {
       description: work.description,
       status: work.status,
       amount: work.amount,
-      creator: {
-        name: creatorName,
-      },
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating work:', error);
