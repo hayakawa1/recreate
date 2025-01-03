@@ -73,12 +73,15 @@ export default function ProfilePage() {
         throw new Error(errorText);
       }
 
+      const result = await response.json();
       setUserStatus(newStatus);
       setSuccess('ステータスを更新しました');
       setTimeout(() => setSuccess(''), 2000);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Status update error:', error);
       setError(error instanceof Error ? error.message : 'ステータスの更新に失敗しました');
+      // エラーが発生した場合は元のステータスに戻す
+      setUserStatus(userStatus);
     }
   };
 

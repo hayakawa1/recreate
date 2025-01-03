@@ -68,6 +68,11 @@ export async function PUT(req: Request) {
     // ステータス変更時のみ有効性チェック
     if (status !== undefined) {
       const hasValidPlan = await hasValidPriceEntry(session.user.id);
+      console.log('Status change request:', {
+        userId: session.user.id,
+        newStatus: status,
+        hasValidPlan
+      });
       if (!hasValidPlan && (status === 'available' || status === 'availableButHidden')) {
         return new NextResponse('有効な料金プランが設定されていないため、受付開始できません。', { status: 400 });
       }
