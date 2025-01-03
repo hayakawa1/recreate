@@ -56,7 +56,7 @@ export default function ReceivedRequestsPage() {
   // 統計情報を計算（filteredWorksを使用）
   const stats = {
     total: filteredWorks.length,
-    requested: filteredWorks.filter(w => w.status === 'pending').length,
+    pending: filteredWorks.filter(w => w.status === 'pending').length,
     delivered: filteredWorks.filter(w => w.status === 'delivered').length,
     paid: filteredWorks.filter(w => w.status === 'paid').length,
     rejected: filteredWorks.filter(w => w.status === 'rejected').length,
@@ -198,7 +198,7 @@ export default function ReceivedRequestsPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">リクエスト中</p>
-              <p className="text-xl font-bold">{stats.requested}</p>
+              <p className="text-xl font-bold">{stats.pending}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">納品済み</p>
