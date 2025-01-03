@@ -10,12 +10,15 @@ interface User {
   name: string;
   username: string | null;
   image: string | null;
-}
-
-interface PriceEntry {
-  id: string;
-  amount: number;
   description: string;
+  status: 'available' | 'availableButHidden' | 'unavailable';
+  price_entries: {
+    id: string;
+    amount: number;
+    description: string;
+    stripe_url: string;
+    is_hidden: boolean;
+  }[];
 }
 
 export default function NewRequestPage() {
@@ -23,34 +26,25 @@ export default function NewRequestPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
-  const [priceEntry, setPriceEntry] = useState<PriceEntry | null>(null);
-  const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<string>(searchParams.get('plan') || '');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchUser = async () => {
       try {
         const userId = searchParams.get('user');
-        const planId = searchParams.get('plan');
-
-        if (!userId || !planId) {
-          throw new Error('必要なパラメータが不足しています');
+        if (!userId) {
+          throw new Error('ユーザーIDが指定されていません');
         }
 
-        const userResponse = await fetch(`/api/users/${userId}`);
-        if (!userResponse.ok) {
-          throw new Error('ユーザー情報の取得に失敗しました');
+        const response = await fetch(`/api/users/${userId}`);
+        if (!response.ok) {
+          throw new Error('ユーザーが見つかりません');
         }
-        const userData = await userResponse.json();
-        setUser(userData);
-
-        const selectedPrice = userData.price_entries.find((p: PriceEntry) => p.id === planId);
-        if (!selectedPrice) {
-          throw new Error('指定された料金プランが見つかりません');
-        }
-        setPriceEntry(selectedPrice);
+        const data = await response.json();
+        setUser(data);
       } catch (error) {
         setError(error instanceof Error ? error.message : 'エラーが発生しました');
       } finally {
@@ -58,14 +52,13 @@ export default function NewRequestPage() {
       }
     };
 
-    fetchData();
+    fetchUser();
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!session?.user?.id || !user?.id || !priceEntry?.id) return;
+    if (!user || !selectedPlan || !message.trim()) return;
 
-    setIsSubmitting(true);
     try {
       const response = await fetch('/api/works', {
         method: 'POST',
@@ -73,9 +66,9 @@ export default function NewRequestPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          creatorId: user.id,
-          priceId: priceEntry.id,
-          description,
+          userId: user.id,
+          priceId: selectedPlan,
+          message: message.trim(),
         }),
       });
 
@@ -86,25 +79,14 @@ export default function NewRequestPage() {
       router.push('/requests/sent');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'エラーが発生しました');
-      setIsSubmitting(false);
     }
   };
 
-  if (!session) {
-    return (
-      <div className="max-w-2xl mx-auto py-8 px-4">
-        <div className="text-center">
-          <p className="text-gray-600">ログインしてください</p>
-        </div>
-      </div>
-    );
-  }
-
   if (isLoading) {
     return (
-      <div className="max-w-2xl mx-auto py-8 px-4">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">読み込み中...</p>
+          <div className="text-gray-500">読み込み中...</div>
         </div>
       </div>
     );
@@ -120,87 +102,82 @@ export default function NewRequestPage() {
     );
   }
 
-  if (!user || !priceEntry) {
+  if (!user) {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4">
         <div className="text-red-700 bg-red-100 p-4 rounded-md">
-          必要な情報が見つかりません
+          ユーザーが見つかりません
         </div>
       </div>
     );
   }
 
+  const availablePrices = user.price_entries.filter(entry => !entry.is_hidden);
+
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="p-6">
-          <h1 className="text-2xl font-bold mb-6">リクエストの送信</h1>
-
-          <div className="mb-6">
-            <div className="flex items-center space-x-4">
-              {user.image && (
-                <Image
-                  src={user.image}
-                  alt={user.name}
-                  width={48}
-                  height={48}
-                  className="rounded-full"
-                />
-              )}
-              <div>
-                <p className="font-medium">{user.name}</p>
-                {user.username && (
-                  <p className="text-sm text-gray-500">@{user.username}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <div className="bg-gray-50 p-4 rounded-md">
-              <div className="font-medium mb-1">
-                ¥{priceEntry.amount.toLocaleString()}
-              </div>
-              {priceEntry.description && (
-                <div className="text-sm text-gray-600">
-                  {priceEntry.description}
-                </div>
+          <div className="flex items-center space-x-4 mb-6">
+            {user.image && (
+              <Image
+                src={user.image}
+                alt={user.name}
+                width={64}
+                height={64}
+                className="rounded-full"
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
+              {user.username && (
+                <p className="text-gray-500">@{user.username}</p>
               )}
             </div>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="mb-6">
-              <label
-                htmlFor="description"
-                className="block text-sm font-medium text-gray-700 mb-2"
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="plan" className="block text-sm font-medium text-gray-700">
+                料金プラン
+              </label>
+              <select
+                id="plan"
+                value={selectedPlan}
+                onChange={(e) => setSelectedPlan(e.target.value)}
+                required
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
               >
-                リクエスト内容
+                <option value="">プランを選択してください</option>
+                {availablePrices.map((price) => (
+                  <option key={price.id} value={price.id}>
+                    ¥{price.amount.toLocaleString()} - {price.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+                メッセージ
               </label>
               <textarea
-                id="description"
-                rows={4}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                id="message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 required
+                rows={4}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="依頼内容を詳しく記入してください"
               />
             </div>
 
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                キャンセル
-              </button>
+            <div>
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                {isSubmitting ? '送信中...' : 'リクエストを送信'}
+                リクエストを送信
               </button>
             </div>
           </form>
