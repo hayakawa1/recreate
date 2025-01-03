@@ -169,10 +169,10 @@ export default function SentRequestsPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
               >
                 <option value="all">全てのステータス</option>
-                <option value="requested">リクエスト中</option>
+                <option value="pending">リクエスト中</option>
                 <option value="delivered">納品済み</option>
                 <option value="paid">支払い済み</option>
-                <option value="rejected">拒否</option>
+                <option value="rejected">却下</option>
               </select>
             </div>
           </div>
