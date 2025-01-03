@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { debounce } from 'lodash';
 
 type PriceEntry = {
+  id?: string;
   amount: number;
   stripeUrl: string;
   description: string;
@@ -22,140 +22,36 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // 自動保存用の関数
-  const saveChanges = async (data: any) => {
-    setError('');
-    try {
-      const response = await fetch('/api/users/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData);
-      }
-
-      const result = await response.json();
-      if (result.warning) {
-        setError(result.warning);
-      } else {
-        setSuccess('保存しました');
-        setTimeout(() => setSuccess(''), 2000);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      setError(error instanceof Error ? error.message : '更新に失敗しました');
-    }
-  };
-
-  // 料金プラン保存用の関数
-  const savePriceEntry = async (entry: PriceEntry & { id?: string }) => {
-    setError('');
-    try {
-      const response = await fetch('/api/users/me/price-entries', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: entry.id,
-          amount: entry.amount,
-          stripe_url: entry.stripeUrl,
-          description: entry.description,
-          is_hidden: entry.isHidden
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData);
-      }
-
-      const result = await response.json();
-      setSuccess('保存しました');
-      setTimeout(() => setSuccess(''), 2000);
-      return result;
-    } catch (error) {
-      console.error('Error:', error);
-      setError(error instanceof Error ? error.message : '更新に失敗しました');
-      throw error;
-    }
-  };
-
-  // 料金プラン削除用の関数
-  const deletePriceEntry = async (id: string) => {
-    setError('');
-    try {
-      const response = await fetch(`/api/users/me/price-entries?id=${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData);
-      }
-
-      setSuccess('削除しました');
-      setTimeout(() => setSuccess(''), 2000);
-    } catch (error) {
-      console.error('Error:', error);
-      setError(error instanceof Error ? error.message : '削除に失敗しました');
-      throw error;
-    }
-  };
-
-  // debounceされた保存関数
-  const debouncedSave = debounce(saveChanges, 1000);
-
+  // プロフィール情報の取得
   useEffect(() => {
     if (authStatus === 'loading') return;
-    
     if (authStatus === 'unauthenticated') {
       router.replace('/auth/signin');
       return;
     }
-
     if (authStatus === 'authenticated' && session?.user?.id) {
       setIsLoading(true);
       fetch('/api/users/me')
         .then(async (res) => {
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => null);
-            throw new Error(errorData?.error || 'プロフィールの取得に失敗しました');
-          }
+          if (!res.ok) throw new Error('プロフィールの取得に失敗しました');
           return res.json();
         })
         .then((data) => {
           setUserStatus(data.status || 'unavailable');
           setDescription(data.description || '');
-          const entries = data.price_entries?.length > 0
-            ? data.price_entries.map((entry: any) => ({
-                amount: entry.amount,
-                stripeUrl: entry.stripe_url || '',
-                description: entry.description || entry.title || '',
-                isHidden: entry.is_hidden
-              }))
-            : [{ 
-                amount: 1000, 
-                stripeUrl: '', 
-                description: '',
-                isHidden: false 
-              }];
-          setPriceEntries(entries);
+          if (data.price_entries?.length > 0) {
+            setPriceEntries(data.price_entries.map((entry: any) => ({
+              id: entry.id,
+              amount: entry.amount,
+              stripeUrl: entry.stripe_url || '',
+              description: entry.description || '',
+              isHidden: entry.is_hidden
+            })));
+          }
         })
         .catch((error) => {
           console.error('Error:', error);
           setError('プロフィールの取得に失敗しました');
-          setPriceEntries([{ 
-            amount: 1000, 
-            stripeUrl: '', 
-            description: '',
-            isHidden: false 
-          }]);
         })
         .finally(() => {
           setIsLoading(false);
@@ -163,67 +59,140 @@ export default function ProfilePage() {
     }
   }, [authStatus, session?.user?.id, router]);
 
-  // ステータス変更時の処理
-  const handleStatusChange = (newStatus: typeof userStatus) => {
-    setUserStatus(newStatus);
-    saveChanges({
-      status: newStatus
-    });
-  };
-
-  // 説明文変更時の処理
-  const handleDescriptionChange = (newDescription: string) => {
-    setDescription(newDescription);
-    saveChanges({
-      description: newDescription
-    });
-  };
-
-  const handleAddPriceEntry = () => {
-    const newEntry = { amount: 1000, stripeUrl: '', description: '', isHidden: false };
-    setPriceEntries([...priceEntries, newEntry]);
-    savePriceEntry(newEntry);
-  };
-
-  const handlePriceChange = (index: number, value: number) => {
-    const newEntries = [...priceEntries];
-    newEntries[index] = { ...newEntries[index], amount: value };
-    setPriceEntries(newEntries);
-  };
-
-  const handlePriceBlur = async (index: number) => {
+  // ステータス変更
+  const handleStatusChange = async (newStatus: typeof userStatus) => {
     try {
-      const entry = priceEntries[index];
-      const result = await savePriceEntry(entry);
-      // IDを更新
-      const newEntries = [...priceEntries];
-      newEntries[index] = { ...entry, id: result.id };
-      setPriceEntries(newEntries);
+      const response = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+
+      setUserStatus(newStatus);
+      setSuccess('ステータスを更新しました');
+      setTimeout(() => setSuccess(''), 2000);
     } catch (error) {
-      // エラーは既に処理済み
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : 'ステータスの更新に失敗しました');
     }
   };
 
-  const handleStripeUrlChange = (index: number, value: string) => {
-    const newEntries = [...priceEntries];
-    newEntries[index] = { ...newEntries[index], stripeUrl: value };
-    setPriceEntries(newEntries);
-  };
-
-  const handlePriceDescriptionChange = (index: number, value: string) => {
-    const newEntries = [...priceEntries];
-    newEntries[index] = { ...newEntries[index], description: value };
-    setPriceEntries(newEntries);
-  };
-
-  const handleVisibilityChange = async (index: number) => {
-    const newEntries = [...priceEntries];
-    newEntries[index] = { ...newEntries[index], isHidden: !newEntries[index].isHidden };
-    setPriceEntries(newEntries);
+  // 自己紹介変更
+  const handleDescriptionChange = async (newDescription: string) => {
     try {
-      await savePriceEntry(newEntries[index]);
+      const response = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: newDescription })
+      });
+
+      if (!response.ok) throw new Error('自己紹介の更新に失敗しました');
+      
+      setDescription(newDescription);
+      setSuccess('自己紹介を更新しました');
+      setTimeout(() => setSuccess(''), 2000);
     } catch (error) {
-      // エラーは既に処理済み
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '自己紹介の更新に失敗しました');
+    }
+  };
+
+  // 料金プラン更新
+  const updatePriceEntry = async (entry: PriceEntry) => {
+    try {
+      const response = await fetch('/api/users/me/price-entries', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: entry.id,
+          amount: entry.amount,
+          stripe_url: entry.stripeUrl,
+          description: entry.description,
+          is_hidden: entry.isHidden
+        })
+      });
+
+      if (!response.ok) throw new Error('料金プランの更新に失敗しました');
+
+      const updatedEntry = await response.json();
+      setPriceEntries(current => 
+        current.map(e => e.id === updatedEntry.id ? {
+          id: updatedEntry.id,
+          amount: updatedEntry.amount,
+          stripeUrl: updatedEntry.stripe_url,
+          description: updatedEntry.description,
+          isHidden: updatedEntry.is_hidden
+        } : e)
+      );
+      setSuccess('料金プランを更新しました');
+      setTimeout(() => setSuccess(''), 2000);
+      return updatedEntry;
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '料金プランの更新に失敗しました');
+      throw error;
+    }
+  };
+
+  // 料金プラン追加
+  const handleAddPriceEntry = async () => {
+    const newEntry = {
+      amount: 1000,
+      stripeUrl: '',
+      description: '',
+      isHidden: false
+    };
+
+    try {
+      const response = await fetch('/api/users/me/price-entries', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: newEntry.amount,
+          stripe_url: newEntry.stripeUrl,
+          description: newEntry.description,
+          is_hidden: newEntry.isHidden
+        })
+      });
+
+      if (!response.ok) throw new Error('料金プランの追加に失敗しました');
+
+      const createdEntry = await response.json();
+      setPriceEntries(current => [...current, {
+        id: createdEntry.id,
+        amount: createdEntry.amount,
+        stripeUrl: createdEntry.stripe_url,
+        description: createdEntry.description,
+        isHidden: createdEntry.is_hidden
+      }]);
+      setSuccess('料金プランを追加しました');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '料金プランの追加に失敗しました');
+    }
+  };
+
+  // 料金プラン削除
+  const handleDeletePriceEntry = async (id: string) => {
+    try {
+      const response = await fetch(`/api/users/me/price-entries?id=${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('料金プランの削除に失敗しました');
+
+      setPriceEntries(current => current.filter(entry => entry.id !== id));
+      setSuccess('料金プランを削除しました');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : '料金プランの削除に失敗しました');
     }
   };
 
@@ -277,7 +246,8 @@ export default function ProfilePage() {
           <div className="mt-1">
             <textarea
               value={description}
-              onChange={(e) => handleDescriptionChange(e.target.value)}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={(e) => handleDescriptionChange(e.target.value)}
               rows={4}
               className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
             />
@@ -289,8 +259,8 @@ export default function ProfilePage() {
             金額とStripe決済URL
           </label>
           <div className="space-y-4">
-            {priceEntries.map((entry, index) => (
-              <div key={index} className={`space-y-2 p-4 border border-gray-200 rounded-md ${
+            {priceEntries.map((entry) => (
+              <div key={entry.id} className={`space-y-2 p-4 border border-gray-200 rounded-md ${
                 entry.isHidden ? 'bg-gray-50' : ''
               }`}>
                 <div className="flex items-center space-x-2">
@@ -300,31 +270,53 @@ export default function ProfilePage() {
                       type="number"
                       min="300"
                       value={entry.amount}
-                      onChange={(e) => handlePriceChange(index, parseInt(e.target.value))}
-                      onBlur={() => handlePriceBlur(index)}
+                      onChange={(e) => {
+                        const newEntry = { ...entry, amount: parseInt(e.target.value) };
+                        setPriceEntries(current => 
+                          current.map(e => e.id === entry.id ? newEntry : e)
+                        );
+                      }}
+                      onBlur={() => updatePriceEntry(entry)}
                       className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                         entry.isHidden ? 'bg-gray-100' : ''
                       }`}
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleVisibilityChange(index)}
-                    className={`px-3 py-2 text-sm font-medium rounded-md ${
-                      entry.isHidden 
-                        ? 'bg-red-100 text-red-700' 
-                        : 'bg-green-100 text-green-700'
-                    }`}
-                  >
-                    {entry.isHidden ? '非公開' : '公開中'}
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const newEntry = { ...entry, isHidden: !entry.isHidden };
+                        await updatePriceEntry(newEntry);
+                      }}
+                      className={`px-3 py-2 text-sm font-medium rounded-md ${
+                        entry.isHidden 
+                          ? 'bg-red-100 text-red-700' 
+                          : 'bg-green-100 text-green-700'
+                      }`}
+                    >
+                      {entry.isHidden ? '非公開' : '公開中'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePriceEntry(entry.id!)}
+                      className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700"
+                    >
+                      削除
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">説明</label>
                   <textarea
                     value={entry.description}
-                    onChange={(e) => handlePriceDescriptionChange(index, e.target.value)}
-                    onBlur={() => handlePriceBlur(index)}
+                    onChange={(e) => {
+                      const newEntry = { ...entry, description: e.target.value };
+                      setPriceEntries(current => 
+                        current.map(e => e.id === entry.id ? newEntry : e)
+                      );
+                    }}
+                    onBlur={() => updatePriceEntry(entry)}
                     rows={2}
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
@@ -336,8 +328,13 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     value={entry.stripeUrl}
-                    onChange={(e) => handleStripeUrlChange(index, e.target.value)}
-                    onBlur={() => handlePriceBlur(index)}
+                    onChange={(e) => {
+                      const newEntry = { ...entry, stripeUrl: e.target.value };
+                      setPriceEntries(current => 
+                        current.map(e => e.id === entry.id ? newEntry : e)
+                      );
+                    }}
+                    onBlur={() => updatePriceEntry(entry)}
                     className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
                       entry.isHidden ? 'bg-gray-100' : ''
                     }`}
