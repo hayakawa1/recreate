@@ -49,10 +49,20 @@ export async function hasValidPriceEntry(userId: string): Promise<boolean> {
       SELECT 1 FROM price_entries 
       WHERE user_id = $1 
       AND amount > 0 
+      AND stripe_url != '' 
       AND NOT is_hidden
     )`,
     [userId]
   );
+
+  // デバッグ用のログ
+  const entries = await query(
+    `SELECT * FROM price_entries WHERE user_id = $1`,
+    [userId]
+  );
+  console.log('Price entries for user:', entries.rows);
+  console.log('Has valid price entry:', result.rows[0].exists);
+
   return result.rows[0].exists;
 }
 
