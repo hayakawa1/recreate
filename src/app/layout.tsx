@@ -8,7 +8,7 @@ import NavBar from '@/components/NavBar';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Recreate',
+  title: 'Re:Create',
   description: 'クリエイターのための依頼管理サービス',
 };
 

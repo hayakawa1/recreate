@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { WorkStatus } from '@/types';
+import { WorkStatus, workStatusDisplayNames } from '@/types/work';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -169,10 +169,11 @@ export default function SentRequestsPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
               >
                 <option value="all">全てのステータス</option>
-                <option value="pending">リクエスト中</option>
-                <option value="delivered">納品済み</option>
-                <option value="paid">支払い済み</option>
-                <option value="rejected">却下</option>
+                {Object.entries(workStatusDisplayNames).map(([status, displayName]) => (
+                  <option key={status} value={status}>
+                    {displayName}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -184,19 +185,19 @@ export default function SentRequestsPage() {
               <p className="text-xl font-bold">{stats.total}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">リクエスト中</p>
+              <p className="text-sm text-gray-500">{workStatusDisplayNames.pending}</p>
               <p className="text-xl font-bold">{stats.pending}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">納品済み</p>
+              <p className="text-sm text-gray-500">{workStatusDisplayNames.delivered}</p>
               <p className="text-xl font-bold">{stats.delivered}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">支払い済み</p>
+              <p className="text-sm text-gray-500">{workStatusDisplayNames.paid}</p>
               <p className="text-xl font-bold">{stats.paid}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">拒否</p>
+              <p className="text-sm text-gray-500">{workStatusDisplayNames.rejected}</p>
               <p className="text-xl font-bold">{stats.rejected}</p>
             </div>
           </div>
@@ -255,15 +256,7 @@ export default function SentRequestsPage() {
                           : 'bg-gray-100 text-gray-800'
                       }`}
                     >
-                      {work.status === 'pending'
-                        ? 'リクエスト中'
-                        : work.status === 'delivered'
-                        ? '納品済み'
-                        : work.status === 'paid'
-                        ? '支払い済み'
-                        : work.status === 'rejected'
-                        ? '拒否'
-                        : work.status}
+                      {workStatusDisplayNames[work.status as WorkStatus]}
                     </span>
                   </div>
                   <div>

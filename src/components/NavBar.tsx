@@ -19,7 +19,7 @@ export default function NavBar() {
         <div className="flex justify-between items-center h-16">
           {/* サイトロゴ */}
           <Link href="/" className="text-xl font-bold">
-            ReCreate
+            Re:Create
           </Link>
 
           {/* ユーザーメニュー */}

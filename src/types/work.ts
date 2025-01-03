@@ -2,7 +2,7 @@ export type WorkStatus = 'pending' | 'accepted' | 'rejected' | 'delivered' | 'pa
 
 // ステータスの表示名マッピング
 export const workStatusDisplayNames: Record<WorkStatus, string> = {
-  pending: '未対応',
+  pending: 'リクエスト中',
   accepted: '作業中',
   rejected: '却下',
   delivered: '納品済み',
