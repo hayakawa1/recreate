@@ -1,15 +1,11 @@
 import { NextAuthOptions } from 'next-auth';
 import TwitterProvider from 'next-auth/providers/twitter';
-import { Pool } from 'pg';
+import pool from '@/lib/db';
 import crypto from 'crypto';
 
 if (!process.env.TWITTER_CLIENT_ID || !process.env.TWITTER_CLIENT_SECRET) {
   throw new Error('Missing Twitter OAuth credentials');
 }
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -31,26 +27,32 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.twitter_id) {
-        try {
-          const result = await pool.query(
-            `SELECT id, username, name, description, status
-            FROM users
-            WHERE twitter_id = $1`,
-            [token.twitter_id]
-          );
-
-          if (result.rows[0]) {
-            session.user.id = result.rows[0].id;
-            session.user.username = result.rows[0].username;
-            session.user.name = result.rows[0].name;
-            (session.user as any).description = result.rows[0].description;
-            (session.user as any).status = result.rows[0].status;
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-        }
+      if (!session.user || !token.twitter_id) {
+        return session;
       }
+
+      try {
+        const result = await pool.query(
+          `SELECT id, username, name, description, status
+          FROM users
+          WHERE twitter_id = $1`,
+          [token.twitter_id]
+        );
+
+        if (!result.rows[0]) {
+          console.error('User not found in database');
+          return session;
+        }
+
+        session.user.id = result.rows[0].id;
+        session.user.username = result.rows[0].username;
+        session.user.name = result.rows[0].name;
+        (session.user as any).description = result.rows[0].description;
+        (session.user as any).status = result.rows[0].status;
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+
       return session;
     },
     async signIn({ user, profile }) {

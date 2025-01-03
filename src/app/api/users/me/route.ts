@@ -1,13 +1,13 @@
 import { getServerSession } from 'next-auth'
 import { NextResponse } from 'next/server'
 import { authOptions } from '@/lib/auth'
-import { pool } from '@/lib/db'
+import pool from '@/lib/db'
 import crypto from 'crypto'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 })
+    return new NextResponse('認証が必要です。再度ログインしてください。', { status: 401 })
   }
 
   try {
@@ -35,13 +35,14 @@ export async function GET() {
     )
 
     if (!user) {
-      return new NextResponse('User not found', { status: 404 })
+      console.error('User not found in database:', session.user.id)
+      return new NextResponse('ユーザー情報が見つかりません。再度ログインしてください。', { status: 404 })
     }
 
     return NextResponse.json(user)
   } catch (error) {
     console.error('Failed to get user:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return new NextResponse('サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。', { status: 500 })
   }
 }
 
@@ -66,9 +67,9 @@ export async function PUT(req: Request) {
         [status, description, session.user.id]
       )
 
-      // 既存の価格設定を削除
+      // 既存の価格設定を非表示に設定
       await client.query(
-        'DELETE FROM price_entries WHERE user_id = $1',
+        'UPDATE price_entries SET is_hidden = true WHERE user_id = $1',
         [session.user.id]
       )
 
@@ -77,11 +78,11 @@ export async function PUT(req: Request) {
         const values = priceEntries.map(entry => [
           crypto.randomUUID(),
           session.user.id,
-          entry.title,
+          entry.title || entry.description,
           entry.amount,
           entry.stripe_url,
           entry.description,
-          entry.is_hidden
+          entry.isHidden
         ])
 
         const placeholders = values.map((_, i) => 

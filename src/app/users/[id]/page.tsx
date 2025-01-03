@@ -232,7 +232,7 @@ export default function CreatorPage() {
                     <option value="">プランを選択してください</option>
                     {availablePrices.map((price) => (
                       <option key={price.id} value={price.id}>
-                        ¥{price.amount.toLocaleString()} - {price.description}
+                        ¥{price.amount.toLocaleString()}
                       </option>
                     ))}
                   </select>

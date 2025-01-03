@@ -23,11 +23,13 @@ export async function GET(request: Request) {
         w.status,
         w.amount,
         w.created_at,
+        pe.stripe_url,
         u.name as requester_name,
         u.image as requester_image,
         u.username as requester_username
        FROM works w
        JOIN users u ON w.requester_id::text = u.id::text
+       LEFT JOIN price_entries pe ON w.price_entry_id = pe.id
        WHERE w.creator_id::text = $1::text
        ORDER BY w.created_at DESC`,
       [session.user.id]
@@ -42,6 +44,7 @@ export async function GET(request: Request) {
       description: row.description,
       status: row.status,
       amount: row.amount,
+      stripe_url: row.stripe_url,
       requester: {
         name: row.requester_name,
         image: row.requester_image,
