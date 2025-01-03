@@ -74,43 +74,16 @@ export default function ProfilePage() {
       }
 
       const result = await response.json();
-      if (!result.hasValidPlan && (newStatus === 'available' || newStatus === 'availableButHidden')) {
-        setError('有効な料金プランが設定されていないため、受付開始できません。');
-        setTimeout(() => setError(''), 3000);
-        setUserStatus('unavailable');
-      } else {
-        setUserStatus(newStatus);
-        setSuccess('ステータスを更新しました');
-        setTimeout(() => setSuccess(''), 2000);
-      }
+      setUserStatus(newStatus);
+      setSuccess('ステータスを更新しました');
+      setTimeout(() => setSuccess(''), 2000);
     } catch (error) {
       console.error('Status update error:', error);
       setError(error instanceof Error ? error.message : 'ステータスの更新に失敗しました');
-      setUserStatus('unavailable');
+      // エラーが発生した場合は元のステータスに戻す
+      setUserStatus(userStatus);
+      // エラーメッセージを3秒後に消す
       setTimeout(() => setError(''), 3000);
-    }
-  };
-
-  // 料金プラン更新後のステータスチェック
-  const checkStatusAfterPriceUpdate = async () => {
-    try {
-      const response = await fetch('/api/users/me');
-      if (!response.ok) throw new Error('ステータスの確認に失敗しました');
-      
-      const data = await response.json();
-      if (!data.hasValidPlan && (userStatus === 'available' || userStatus === 'availableButHidden')) {
-        setError('有効な料金プランがなくなったため、受付停止状態に変更されました。');
-        setTimeout(() => setError(''), 3000);
-        setUserStatus('unavailable');
-        // サーバー側でもステータスを更新
-        await fetch('/api/users/me', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'unavailable' })
-        });
-      }
-    } catch (error) {
-      console.error('Status check error:', error);
     }
   };
 
@@ -163,15 +136,10 @@ export default function ProfilePage() {
       );
       setSuccess('料金プランを更新しました');
       setTimeout(() => setSuccess(''), 2000);
-
-      // 料金プランの更新後にステータスをチェック
-      await checkStatusAfterPriceUpdate();
-
       return updatedEntry;
     } catch (error) {
       console.error('Error:', error);
       setError(error instanceof Error ? error.message : '料金プランの更新に失敗しました');
-      setTimeout(() => setError(''), 3000);
       throw error;
     }
   };
@@ -248,27 +216,27 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-8">プロフィール設定</h1>
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <h1 className="text-2xl font-bold text-gray-800 mb-8">プロフィール設定</h1>
       {error && (
-        <div className="mb-4 p-4 text-red-700 bg-red-100 rounded-md">
+        <div className="mb-4 p-4 text-red-700 bg-red-50 rounded-lg border border-red-100">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-4 text-green-700 bg-green-100 rounded-md">
+        <div className="mb-4 p-4 text-green-700 bg-green-50 rounded-lg border border-green-100">
           {success}
         </div>
       )}
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
+      <div className="space-y-8">
+        <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-100">
+          <label className="block text-sm font-medium text-gray-700 mb-3">
             ステータス
           </label>
           <select
             value={userStatus}
             onChange={(e) => handleStatusChange(e.target.value as typeof userStatus)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+            className="block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg transition-colors"
           >
             <option value="available">リクエスト受付中</option>
             <option value="availableButHidden">非公開で受付中</option>
@@ -276,33 +244,41 @@ export default function ProfilePage() {
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
+        <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-100">
+          <label className="block text-sm font-medium text-gray-700 mb-3">
             自己紹介
           </label>
-          <div className="mt-1">
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={(e) => handleDescriptionChange(e.target.value)}
-              rows={4}
-              className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-            />
-          </div>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={(e) => handleDescriptionChange(e.target.value)}
+            rows={4}
+            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg transition-colors"
+            placeholder="あなたのクリエイターとしての経験や得意分野について書いてください"
+          />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            金額とStripe決済URL
-          </label>
+        <div className="bg-white shadow-sm rounded-lg p-6 border border-gray-100">
+          <div className="flex justify-between items-center mb-4">
+            <label className="block text-sm font-medium text-gray-700">
+              金額とStripe決済URL
+            </label>
+            <button
+              type="button"
+              onClick={handleAddPriceEntry}
+              className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
+            >
+              + 料金プランを追加
+            </button>
+          </div>
           <div className="space-y-4">
             {priceEntries.map((entry) => (
-              <div key={entry.id} className={`space-y-2 p-4 border border-gray-200 rounded-md ${
-                entry.isHidden ? 'bg-gray-50' : ''
+              <div key={entry.id} className={`space-y-3 p-4 border rounded-lg transition-colors ${
+                entry.isHidden ? 'bg-gray-50 border-gray-200' : 'border-gray-200 hover:border-gray-300'
               }`}>
                 <div className="flex items-center space-x-2">
                   <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">金額</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">金額</label>
                     <input
                       type="number"
                       min="300"
@@ -314,7 +290,7 @@ export default function ProfilePage() {
                         );
                       }}
                       onBlur={() => updatePriceEntry(entry)}
-                      className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                      className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg transition-colors ${
                         entry.isHidden ? 'bg-gray-100' : ''
                       }`}
                     />
@@ -326,10 +302,10 @@ export default function ProfilePage() {
                         const newEntry = { ...entry, isHidden: !entry.isHidden };
                         await updatePriceEntry(newEntry);
                       }}
-                      className={`px-3 py-2 text-sm font-medium rounded-md ${
+                      className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                         entry.isHidden 
-                          ? 'bg-red-100 text-red-700' 
-                          : 'bg-green-100 text-green-700'
+                          ? 'bg-red-50 text-red-700 hover:bg-red-100' 
+                          : 'bg-green-50 text-green-700 hover:bg-green-100'
                       }`}
                     >
                       {entry.isHidden ? '非公開' : '公開中'}
@@ -337,14 +313,14 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => handleDeletePriceEntry(entry.id!)}
-                      className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700"
+                      className="px-3 py-2 text-sm font-medium rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
                     >
                       削除
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">説明</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">説明</label>
                   <textarea
                     value={entry.description}
                     onChange={(e) => {
@@ -355,13 +331,14 @@ export default function ProfilePage() {
                     }}
                     onBlur={() => updatePriceEntry(entry)}
                     rows={2}
-                    className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                    placeholder="このプランの詳細や条件について説明してください"
+                    className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg transition-colors ${
                       entry.isHidden ? 'bg-gray-100' : ''
                     }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Stripe決済URL</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Stripe決済URL</label>
                   <input
                     type="text"
                     value={entry.stripeUrl}
@@ -372,7 +349,8 @@ export default function ProfilePage() {
                       );
                     }}
                     onBlur={() => updatePriceEntry(entry)}
-                    className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                    placeholder="https://buy.stripe.com/..."
+                    className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg transition-colors ${
                       entry.isHidden ? 'bg-gray-100' : ''
                     }`}
                   />
@@ -380,13 +358,6 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={handleAddPriceEntry}
-            className="mt-4 text-sm text-blue-600 hover:text-blue-500"
-          >
-            + 料金プランを追加
-          </button>
         </div>
       </div>
     </div>

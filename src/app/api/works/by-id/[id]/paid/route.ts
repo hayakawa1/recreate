@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { Pool } from 'pg';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+import { query } from '@/lib/db';
+import { createWorkNotification } from '@/lib/notifications';
 
 export async function POST(
   request: Request,
@@ -18,10 +15,10 @@ export async function POST(
     }
 
     // ワークの存在確認と権限チェック
-    const result = await pool.query(
+    const result = await query(
       `SELECT * FROM works 
       WHERE id = $1 
-      AND requester_id = $2
+      AND creator_id = $2
       AND status = 'delivered'`,
       [params.id, session.user.id]
     );
@@ -31,12 +28,16 @@ export async function POST(
     }
 
     // ステータスを支払い完了に更新
-    await pool.query(
+    const updateResult = await query(
       `UPDATE works 
       SET status = 'paid'
-      WHERE id = $1`,
+      WHERE id = $1
+      RETURNING *`,
       [params.id]
     );
+
+    // 通知を作成
+    await createWorkNotification(updateResult.rows[0], 'status_changed');
 
     return new NextResponse('OK');
   } catch (error) {

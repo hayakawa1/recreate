@@ -91,6 +91,7 @@
 - リクエスト一覧（`/requests`）
   - 受信済み（`/requests/received`）
   - 送信済み（`/requests/sent`）
+- 通知一覧（`/notifications`）
 - 認証関連
   - サインイン（`/auth/signin`）
   - エラー（`/auth/error`）
@@ -104,6 +105,9 @@
 - `/api/works/by-id/[id]/deliver` - 納品ファイルアップロード
 - `/api/works/by-id/[id]/reject` - リクエスト拒否
 - `/api/works/by-id/[id]/paid` - 支払い完了確認
+- `/api/notifications` - 通知一覧取得
+- `/api/notifications/unread-count` - 未読通知数取得
+- `/api/notifications/[id]/read` - 通知を既読にする
 
 ## 8. 環境変数
 必要な環境変数：
@@ -115,3 +119,36 @@
 - `R2_ACCESS_KEY_ID`: Cloudflare R2のアクセスキーID
 - `R2_SECRET_ACCESS_KEY`: Cloudflare R2のシークレットアクセスキー
 - `R2_BUCKET_NAME`: Cloudflare R2のバケット名 
+
+## 9. 通知機能
+
+### 9.1 通知情報
+- ID (UUID)
+- ユーザーID（FK -> users.id）
+- 作品ID（FK -> works.id）
+- 通知タイプ
+  - status_changed: ステータス変更通知
+  - new_request: 新規リクエスト通知
+- メッセージ
+- 既読状態
+- タイムスタンプ（作成日時、更新日時）
+
+### 9.2 通知トリガー
+1. 新規リクエスト時（requested）
+   - 通知先: クリエイター
+   - タイプ: new_request
+2. リクエスト拒否時（rejected）
+   - 通知先: 依頼者
+   - タイプ: status_changed
+3. 納品時（delivered）
+   - 通知先: 依頼者
+   - タイプ: status_changed
+4. 支払い完了時（paid）
+   - 通知先: 依頼者
+   - タイプ: status_changed
+
+### 9.3 通知の表示
+- ヘッダー部分に未読通知数を表示
+- 通知一覧ページで詳細を確認可能
+- 通知をクリックすると対象の作品ページに遷移
+- 既読/未読の管理が可能 

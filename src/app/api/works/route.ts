@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { createWorkNotification } from '@/lib/notifications';
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -59,11 +60,15 @@ export async function POST(request: Request) {
         stripe_url,
         status
       ) VALUES ($1, $2, $3, $4, $5, $6, 'requested')
-      RETURNING id, message, status, amount, stripe_url`,
+      RETURNING *`,
       [session.user.id, userId, message, priceId, amount, stripe_url]
     );
 
     const work = result.rows[0];
+    
+    // 通知を作成
+    await createWorkNotification(work, 'new_request');
+
     return NextResponse.json({
       id: work.id,
       message: work.message,

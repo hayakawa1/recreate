@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { createWorkNotification } from '@/lib/notifications';
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -71,10 +72,13 @@ export async function POST(
 
     // ステータスを納品済みに更新
     try {
-      await query(
-        'UPDATE works SET status = $1 WHERE id = $2',
+      const result = await query(
+        'UPDATE works SET status = $1 WHERE id = $2 RETURNING *',
         ['delivered', params.id]
       );
+      
+      // 通知を作成
+      await createWorkNotification(result.rows[0], 'status_changed');
     } catch (dbError) {
       console.error('Error updating work status:', dbError);
       return new NextResponse('ステータスの更新に失敗しました', { status: 500 });
