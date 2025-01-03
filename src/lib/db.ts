@@ -49,7 +49,6 @@ export async function hasValidPriceEntry(userId: string): Promise<boolean> {
       SELECT 1 FROM price_entries 
       WHERE user_id = $1 
       AND amount > 0 
-      AND stripe_url != '' 
       AND NOT is_hidden
     )`,
     [userId]
