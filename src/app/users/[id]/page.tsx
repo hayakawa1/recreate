@@ -294,8 +294,8 @@ export default function CreatorPage() {
                   <tbody>
                     <tr>
                       <td className="text-left text-sm text-gray-900 py-2">未対応</td>
-                      <td className="text-center text-sm text-gray-900 py-2">{stats.received.pending}</td>
-                      <td className="text-center text-sm text-gray-900 py-2">{stats.sent.pending}</td>
+                      <td className="text-center text-sm text-gray-900 py-2">{stats.received.requested}</td>
+                      <td className="text-center text-sm text-gray-900 py-2">{stats.sent.requested}</td>
                     </tr>
                     <tr>
                       <td className="text-left text-sm text-gray-900 py-2">作業中</td>

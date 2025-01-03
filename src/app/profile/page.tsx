@@ -16,12 +16,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const [userStatus, setUserStatus] = useState<'available' | 'availableButHidden' | 'unavailable'>('unavailable');
   const [description, setDescription] = useState('');
-  const [priceEntries, setPriceEntries] = useState<PriceEntry[]>([{ 
-    amount: 1000, 
-    stripeUrl: '', 
-    description: '',
-    isHidden: false 
-  }]);
+  const [priceEntries, setPriceEntries] = useState<PriceEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -48,24 +43,36 @@ export default function ProfilePage() {
         .then((data) => {
           setUserStatus(data.status || 'unavailable');
           setDescription(data.description || '');
-          if (data.price_entries && data.price_entries.length > 0) {
-            setPriceEntries(data.price_entries.map((entry: any) => ({
-              amount: entry.amount,
-              stripeUrl: entry.stripe_url,
-              description: entry.description || entry.title,
-              isHidden: entry.is_hidden
-            })));
-          }
+          const entries = data.price_entries?.length > 0
+            ? data.price_entries.map((entry: any) => ({
+                amount: entry.amount,
+                stripeUrl: entry.stripe_url || '',
+                description: entry.description || entry.title || '',
+                isHidden: entry.is_hidden
+              }))
+            : [{ 
+                amount: 1000, 
+                stripeUrl: '', 
+                description: '',
+                isHidden: false 
+              }];
+          setPriceEntries(entries);
         })
         .catch((error) => {
           console.error('Error:', error);
           setError('プロフィールの取得に失敗しました');
+          setPriceEntries([{ 
+            amount: 1000, 
+            stripeUrl: '', 
+            description: '',
+            isHidden: false 
+          }]);
         })
         .finally(() => {
           setIsLoading(false);
         });
     }
-  }, [authStatus, session, router]);
+  }, [authStatus, session?.user?.id, router]);
 
   const handleAddPriceEntry = () => {
     setPriceEntries([...priceEntries, { amount: 1000, stripeUrl: '', description: '', isHidden: false }]);

@@ -9,14 +9,13 @@ import Link from 'next/link';
 interface Work {
   id: string;
   sequentialId: number;
-  description: string;
-  status: WorkStatus;
+  message: string;
+  status: string;
   amount: number;
-  stripe_url: string | null;
   requester: {
     name: string;
     image: string;
-    username: string | null;
+    username: string;
   };
 }
 
@@ -27,6 +26,7 @@ export default function ReceivedRequestsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingWorkId, setDownloadingWorkId] = useState<string | null>(null);
   const [deliveringWorkId, setDeliveringWorkId] = useState<string | null>(null);
+  const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WorkStatus | 'all'>('all');
 
@@ -38,7 +38,7 @@ export default function ReceivedRequestsPage() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(work => 
-        work.description.toLowerCase().includes(query) ||
+        work.message.toLowerCase().includes(query) ||
         work.requester.name.toLowerCase().includes(query) ||
         work.requester.username?.toLowerCase().includes(query) ||
         work.sequentialId.toString().includes(query)
@@ -56,7 +56,7 @@ export default function ReceivedRequestsPage() {
   // 統計情報を計算（filteredWorksを使用）
   const stats = {
     total: filteredWorks.length,
-    pending: filteredWorks.filter(w => w.status === 'pending').length,
+    requested: filteredWorks.filter(w => w.status === 'requested').length,
     delivered: filteredWorks.filter(w => w.status === 'delivered').length,
     paid: filteredWorks.filter(w => w.status === 'paid').length,
     rejected: filteredWorks.filter(w => w.status === 'rejected').length,
@@ -119,22 +119,53 @@ export default function ReceivedRequestsPage() {
     }
   };
 
+  const handleConfirmPayment = async (workId: string) => {
+    setConfirmingPaymentId(workId);
+    try {
+      const response = await fetch(`/api/works/by-id/${workId}/paid`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const updatedWorks = works.map(work => 
+          work.id === workId ? { ...work, status: 'paid' as WorkStatus } : work
+        );
+        setWorks(updatedWorks);
+        alert('入金確認が完了しました');
+      } else {
+        const errorText = await response.text();
+        console.error('Payment confirmation failed:', errorText);
+        alert(`入金確認に失敗しました: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      alert(error instanceof Error ? error.message : '入金確認に失敗しました');
+    } finally {
+      setConfirmingPaymentId(null);
+    }
+  };
+
   useEffect(() => {
     const fetchWorks = async () => {
       try {
         const response = await fetch('/api/works/received');
         if (response.ok) {
           const data = await response.json();
-          setWorks(data);
+          // APIレスポンスの型変換
+          const works: Work[] = data.map((work: any) => ({
+            ...work,
+            status: work.status as WorkStatus
+          }));
+          setWorks(works);
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('Error fetching works:', error);
-      } finally {
         setIsLoading(false);
       }
     };
 
-    if (session) {
+    if (session?.user?.id) {
       fetchWorks();
     }
   }, [session]);
@@ -198,8 +229,8 @@ export default function ReceivedRequestsPage() {
               <p className="text-xl font-bold">{stats.total}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">{workStatusDisplayNames.pending}</p>
-              <p className="text-xl font-bold">{stats.pending}</p>
+              <p className="text-sm text-gray-500">{workStatusDisplayNames.requested}</p>
+              <p className="text-xl font-bold">{stats.requested}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">{workStatusDisplayNames.delivered}</p>
@@ -258,7 +289,7 @@ export default function ReceivedRequestsPage() {
                     <span className="text-sm text-gray-500">#{work.sequentialId}</span>
                     <span
                       className={`px-2 py-1 text-sm rounded-full ${
-                        work.status === 'pending'
+                        work.status === 'requested'
                           ? 'bg-blue-100 text-blue-800'
                           : work.status === 'delivered'
                           ? 'bg-green-100 text-green-800'
@@ -269,49 +300,39 @@ export default function ReceivedRequestsPage() {
                           : 'bg-gray-100 text-gray-800'
                       }`}
                     >
-                      {workStatusDisplayNames[work.status as WorkStatus]}
+                      {workStatusDisplayNames[work.status]}
                     </span>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">リクエスト内容</p>
                     <p className="mt-1 text-sm whitespace-pre-wrap">
-                      {work.description}
+                      {work.message}
                     </p>
                   </div>
-                  {work.status === 'pending' && (
-                    <div className="mt-4">
+                  {work.status === 'requested' && (
+                    <div className="flex space-x-2">
                       <button
                         onClick={() => handleDeliver(work.id)}
-                        disabled={deliveringWorkId === work.id}
-                        className={`w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 ${
-                          deliveringWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >
-                        {deliveringWorkId === work.id ? '納品中...' : '納品する'}
+                        納品する
                       </button>
                     </div>
                   )}
                   {work.status === 'delivered' && (
                     <div className="mt-4 flex flex-col gap-2">
                       <button
-                        onClick={() => handleDownload(work.id)}
-                        disabled={downloadingWorkId === work.id}
-                        className={`w-full px-4 py-2 border border-yellow-500 rounded-md text-yellow-600 hover:bg-yellow-50 ${
-                          downloadingWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                        onClick={() => handleConfirmPayment(work.id)}
+                        disabled={confirmingPaymentId === work.id}
+                        className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
                       >
-                        {downloadingWorkId === work.id ? 'ダウンロード中...' : '納品物をダウンロード'}
+                        {confirmingPaymentId === work.id ? '確認中...' : '入金確認'}
                       </button>
-                      {work.stripe_url && (
-                        <a
-                          href={work.stripe_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-center"
-                        >
-                          支払いページへ
-                        </a>
-                      )}
+                    </div>
+                  )}
+                  {work.status === 'paid' && (
+                    <div className="text-sm text-green-600 mt-4">
+                      支払い済み
                     </div>
                   )}
                 </div>

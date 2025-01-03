@@ -80,9 +80,9 @@ export async function PUT(req: Request) {
           session.user.id,
           entry.title || entry.description,
           entry.amount,
-          entry.stripe_url,
-          entry.description,
-          entry.isHidden
+          entry.stripe_url || '',
+          entry.description || '',
+          entry.isHidden ?? false
         ])
 
         const placeholders = values.map((_, i) => 

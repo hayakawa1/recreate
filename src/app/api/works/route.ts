@@ -35,21 +35,20 @@ export async function POST(request: Request) {
       `INSERT INTO works (
         requester_id,
         creator_id,
-        description,
+        message,
         price_entry_id,
-        amount,
         status
-      ) VALUES ($1::text, $2::text, $3, $4, $5, 'pending') 
-      RETURNING id, description, status, amount`,
-      [session.user.id, userId, message, priceId, amount]
+      ) VALUES ($1, $2, $3, $4, 'requested') 
+      RETURNING id, message, status`,
+      [session.user.id, userId, message, priceId]
     );
 
     const work = result.rows[0];
     return NextResponse.json({
       id: work.id,
-      description: work.description,
+      message: work.message,
       status: work.status,
-      amount: work.amount,
+      amount: amount,
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating work:', error);
@@ -69,16 +68,17 @@ export async function GET(request: Request) {
       `SELECT 
         w.id,
         w.sequential_id,
-        w.description,
+        w.message,
         w.status,
-        w.amount,
         w.created_at,
+        p.amount,
         u.name as creator_name,
         u.image as creator_image,
         u.username as creator_username
        FROM works w
-       JOIN users u ON w.creator_id::text = u.id::text
-       WHERE w.requester_id::text = $1::text
+       JOIN users u ON w.creator_id = u.id
+       JOIN price_entries p ON w.price_entry_id = p.id
+       WHERE w.requester_id = $1
        ORDER BY w.created_at DESC`,
       [session.user.id]
     );
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     const works = result.rows.map(row => ({
       id: row.id,
       sequentialId: row.sequential_id,
-      description: row.description,
+      message: row.message,
       status: row.status,
       amount: row.amount,
       creator: {

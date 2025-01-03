@@ -75,10 +75,10 @@ Recreateは、クリエイターと依頼者をつなぐプラットフォーム
 
 ### works テーブル
 - id: UUID (PK)
-- user_id: UUID (FK -> users.id)
+- requester_id: UUID (FK -> users.id)
 - creator_id: UUID (FK -> users.id)
 - price_entry_id: UUID (FK -> price_entries.id)
 - message: TEXT
-- status: TEXT ('pending', 'accepted', 'rejected', 'delivered', 'paid')
+- status: TEXT ('requested', 'rejected', 'delivered', 'paid')
 - created_at: TIMESTAMP
 - updated_at: TIMESTAMP 

@@ -1,9 +1,8 @@
-export type WorkStatus = 'pending' | 'accepted' | 'rejected' | 'delivered' | 'paid';
+export type WorkStatus = 'requested' | 'rejected' | 'delivered' | 'paid';
 
 // ステータスの表示名マッピング
 export const workStatusDisplayNames: Record<WorkStatus, string> = {
-  pending: 'リクエスト中',
-  accepted: '作業中',
+  requested: 'リクエスト中',
   rejected: '却下',
   delivered: '納品済み',
   paid: '支払済み',

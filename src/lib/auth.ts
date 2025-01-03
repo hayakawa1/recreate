@@ -21,7 +21,6 @@ export const authOptions: NextAuthOptions = {
         // Twitterのプロファイルデータを安全に取得
         const twitterProfile = profile as any;
         token.twitter_id = twitterProfile.data.id;
-        token.username = twitterProfile.data.username;
         token.name = twitterProfile.data.name;
       }
       return token;
@@ -33,7 +32,7 @@ export const authOptions: NextAuthOptions = {
 
       try {
         const result = await pool.query(
-          `SELECT id, username, name, description, status
+          `SELECT id, name, description, status
           FROM users
           WHERE twitter_id = $1`,
           [token.twitter_id]
@@ -45,7 +44,6 @@ export const authOptions: NextAuthOptions = {
         }
 
         session.user.id = result.rows[0].id;
-        session.user.username = result.rows[0].username;
         session.user.name = result.rows[0].name;
         (session.user as any).description = result.rows[0].description;
         (session.user as any).status = result.rows[0].status;
@@ -61,7 +59,6 @@ export const authOptions: NextAuthOptions = {
       try {
         const twitterProfile = profile as any;
         const twitter_id = twitterProfile.data.id;
-        const username = twitterProfile.data.username;
         const name = twitterProfile.data.name;
 
         // ユーザーの存在確認
@@ -73,17 +70,17 @@ export const authOptions: NextAuthOptions = {
         if (existingUser.rows.length === 0) {
           // 新規ユーザーの作成
           await pool.query(
-            `INSERT INTO users (id, twitter_id, username, name, image, status)
-            VALUES ($1, $2, $3, $4, $5, $6)`,
-            [crypto.randomUUID(), twitter_id, username, name, user.image, 'unavailable']
+            `INSERT INTO users (id, twitter_id, name, image, status)
+            VALUES ($1, $2, $3, $4, $5)`,
+            [crypto.randomUUID(), twitter_id, name, user.image, 'unavailable']
           );
         } else {
-          // 既存ユーザーの更新（ユーザー名が変更されている可能性がある）
+          // 既存ユーザーの更新
           await pool.query(
             `UPDATE users 
-            SET username = $1, name = $2, image = $3
-            WHERE twitter_id = $4`,
-            [username, name, user.image, twitter_id]
+            SET name = $1, image = $2
+            WHERE twitter_id = $3`,
+            [name, user.image, twitter_id]
           );
         }
 

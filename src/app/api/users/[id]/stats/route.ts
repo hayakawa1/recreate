@@ -21,7 +21,7 @@ export async function GET(
     // 受信した依頼の統計を取得
     const receivedResult = await pool.query(`
       SELECT 
-        COALESCE(status, 'pending') as status,
+        COALESCE(status, 'requested') as status,
         COUNT(*) as count
       FROM works
       WHERE creator_id = $1
@@ -31,7 +31,7 @@ export async function GET(
     // 送信した依頼の統計を取得
     const sentResult = await pool.query(`
       SELECT 
-        COALESCE(status, 'pending') as status,
+        COALESCE(status, 'requested') as status,
         COUNT(*) as count
       FROM works
       WHERE requester_id = $1
@@ -58,7 +58,7 @@ export async function GET(
 
     // 受信した依頼の統計を設定
     receivedResult.rows.forEach(row => {
-      const status = row.status === 'pending' ? 'pending' : row.status;
+      const status = row.status === 'requested' ? 'requested' : row.status;
       if (status in stats.received) {
         stats.received[status as keyof typeof stats.received] = parseInt(row.count);
       }
@@ -66,7 +66,7 @@ export async function GET(
 
     // 送信した依頼の統計を設定
     sentResult.rows.forEach(row => {
-      const status = row.status === 'pending' ? 'pending' : row.status;
+      const status = row.status === 'requested' ? 'requested' : row.status;
       if (status in stats.sent) {
         stats.sent[status as keyof typeof stats.sent] = parseInt(row.count);
       }

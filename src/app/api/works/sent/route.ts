@@ -19,29 +19,31 @@ export async function GET(request: Request) {
       `SELECT 
         w.id,
         w.sequential_id,
-        w.description,
+        w.message,
         w.status,
-        w.amount,
         w.created_at,
+        p.amount,
+        p.stripe_url,
         u.name as creator_name,
         u.image as creator_image,
         u.username as creator_username
        FROM works w
-       JOIN users u ON w.creator_id::text = u.id::text
-       WHERE w.requester_id::text = $1::text
+       JOIN users u ON w.creator_id = u.id
+       JOIN price_entries p ON w.price_entry_id = p.id
+       WHERE w.requester_id = $1
        ORDER BY w.created_at DESC`,
       [session.user.id]
     );
 
-    console.log('Session:', session.user.id);
     console.log('Found works:', result.rows);
 
     const works = result.rows.map(row => ({
       id: row.id,
       sequentialId: row.sequential_id,
-      description: row.description,
+      message: row.message,
       status: row.status,
       amount: row.amount,
+      stripe_url: row.stripe_url,
       creator: {
         name: row.creator_name,
         image: row.creator_image,
