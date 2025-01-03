@@ -74,16 +74,43 @@ export default function ProfilePage() {
       }
 
       const result = await response.json();
-      setUserStatus(newStatus);
-      setSuccess('ステータスを更新しました');
-      setTimeout(() => setSuccess(''), 2000);
+      if (!result.hasValidPlan && (newStatus === 'available' || newStatus === 'availableButHidden')) {
+        setError('有効な料金プランが設定されていないため、受付開始できません。');
+        setTimeout(() => setError(''), 3000);
+        setUserStatus('unavailable');
+      } else {
+        setUserStatus(newStatus);
+        setSuccess('ステータスを更新しました');
+        setTimeout(() => setSuccess(''), 2000);
+      }
     } catch (error) {
       console.error('Status update error:', error);
       setError(error instanceof Error ? error.message : 'ステータスの更新に失敗しました');
-      // エラーが発生した場合は元のステータスに戻す
-      setUserStatus(userStatus);
-      // エラーメッセージを3秒後に消す
+      setUserStatus('unavailable');
       setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // 料金プラン更新後のステータスチェック
+  const checkStatusAfterPriceUpdate = async () => {
+    try {
+      const response = await fetch('/api/users/me');
+      if (!response.ok) throw new Error('ステータスの確認に失敗しました');
+      
+      const data = await response.json();
+      if (!data.hasValidPlan && (userStatus === 'available' || userStatus === 'availableButHidden')) {
+        setError('有効な料金プランがなくなったため、受付停止状態に変更されました。');
+        setTimeout(() => setError(''), 3000);
+        setUserStatus('unavailable');
+        // サーバー側でもステータスを更新
+        await fetch('/api/users/me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'unavailable' })
+        });
+      }
+    } catch (error) {
+      console.error('Status check error:', error);
     }
   };
 
@@ -136,10 +163,15 @@ export default function ProfilePage() {
       );
       setSuccess('料金プランを更新しました');
       setTimeout(() => setSuccess(''), 2000);
+
+      // 料金プランの更新後にステータスをチェック
+      await checkStatusAfterPriceUpdate();
+
       return updatedEntry;
     } catch (error) {
       console.error('Error:', error);
       setError(error instanceof Error ? error.message : '料金プランの更新に失敗しました');
+      setTimeout(() => setError(''), 3000);
       throw error;
     }
   };
