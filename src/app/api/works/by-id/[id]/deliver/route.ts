@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { sql } from '@/lib/db';
+import { query } from '@/lib/db';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({
@@ -24,12 +24,10 @@ export async function POST(
     }
 
     // ワークの存在確認と権限チェック
-    const works = await sql`
-      SELECT * FROM works 
-      WHERE id = ${params.id} 
-      AND creator_id = ${session.user.id}
-      AND status = 'requested'
-    `;
+    const works = await query(
+      'SELECT * FROM works WHERE id = $1 AND creator_id = $2 AND status = $3',
+      [params.id, session.user.id, 'requested']
+    );
 
     if (works.rows.length === 0) {
       return new NextResponse('Work not found or not authorized', { status: 404 });
@@ -73,11 +71,10 @@ export async function POST(
 
     // ステータスを納品済みに更新
     try {
-      await sql`
-        UPDATE works 
-        SET status = 'delivered'
-        WHERE id = ${params.id}
-      `;
+      await query(
+        'UPDATE works SET status = $1 WHERE id = $2',
+        ['delivered', params.id]
+      );
     } catch (dbError) {
       console.error('Error updating work status:', dbError);
       return new NextResponse('ステータスの更新に失敗しました', { status: 500 });

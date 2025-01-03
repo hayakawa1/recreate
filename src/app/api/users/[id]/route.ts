@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { getPool } from '@/lib/db';
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const pool = getPool();
+    
     // ユーザー情報を取得
     const userResult = await pool.query(
       'SELECT id, name, username, image, description, status FROM users WHERE id = $1',

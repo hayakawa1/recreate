@@ -1,6 +1,6 @@
 import { NextAuthOptions } from 'next-auth';
 import TwitterProvider from 'next-auth/providers/twitter';
-import pool from '@/lib/db';
+import { getPool } from '@/lib/db';
 import crypto from 'crypto';
 
 if (!process.env.TWITTER_CLIENT_ID || !process.env.TWITTER_CLIENT_SECRET) {
@@ -31,6 +31,7 @@ export const authOptions: NextAuthOptions = {
       }
 
       try {
+        const pool = getPool();
         const result = await pool.query(
           `SELECT id, name, description, status
           FROM users
@@ -57,6 +58,7 @@ export const authOptions: NextAuthOptions = {
       if (!profile) return false;
 
       try {
+        const pool = getPool();
         const twitterProfile = profile as any;
         const twitter_id = twitterProfile.data.id;
         const name = twitterProfile.data.name;

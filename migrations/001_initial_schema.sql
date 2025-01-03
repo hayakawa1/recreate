@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   username TEXT UNIQUE,
-  email TEXT UNIQUE,
   image TEXT,
   twitter_id TEXT UNIQUE,
   status TEXT DEFAULT 'unavailable',
@@ -16,10 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS price_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  amount INTEGER NOT NULL,
   title TEXT NOT NULL DEFAULT '',
+  amount INTEGER NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  stripe_url TEXT NOT NULL DEFAULT '',
+  stripe_url TEXT NOT NULL,
   is_hidden BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -34,6 +33,8 @@ CREATE TABLE IF NOT EXISTS works (
   price_entry_id UUID NOT NULL REFERENCES price_entries(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'requested',
   message TEXT NOT NULL DEFAULT '',
+  amount INTEGER NOT NULL,
+  stripe_url TEXT NOT NULL,
   file_key TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -52,7 +53,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   token_type TEXT,
   scope TEXT,
   id_token TEXT,
-  session_state TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(provider, provider_account_id)

@@ -10,12 +10,13 @@ interface Work {
   id: string;
   sequentialId: number;
   message: string;
-  status: string;
+  status: WorkStatus;
   amount: number;
+  stripe_url: string | null;
   requester: {
     name: string;
     image: string;
-    username: string;
+    username: string | null;
   };
 }
 
@@ -26,7 +27,6 @@ export default function ReceivedRequestsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingWorkId, setDownloadingWorkId] = useState<string | null>(null);
   const [deliveringWorkId, setDeliveringWorkId] = useState<string | null>(null);
-  const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WorkStatus | 'all'>('all');
 
@@ -116,32 +116,6 @@ export default function ReceivedRequestsPage() {
       alert(error instanceof Error ? error.message : '納品に失敗しました');
     } finally {
       setDeliveringWorkId(null);
-    }
-  };
-
-  const handleConfirmPayment = async (workId: string) => {
-    setConfirmingPaymentId(workId);
-    try {
-      const response = await fetch(`/api/works/by-id/${workId}/paid`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        const updatedWorks = works.map(work => 
-          work.id === workId ? { ...work, status: 'paid' as WorkStatus } : work
-        );
-        setWorks(updatedWorks);
-        alert('入金確認が完了しました');
-      } else {
-        const errorText = await response.text();
-        console.error('Payment confirmation failed:', errorText);
-        alert(`入金確認に失敗しました: ${errorText}`);
-      }
-    } catch (error) {
-      console.error('Error confirming payment:', error);
-      alert(error instanceof Error ? error.message : '入金確認に失敗しました');
-    } finally {
-      setConfirmingPaymentId(null);
     }
   };
 
@@ -310,29 +284,39 @@ export default function ReceivedRequestsPage() {
                     </p>
                   </div>
                   {work.status === 'requested' && (
-                    <div className="flex space-x-2">
+                    <div className="mt-4">
                       <button
                         onClick={() => handleDeliver(work.id)}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        disabled={deliveringWorkId === work.id}
+                        className={`w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 ${
+                          deliveringWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
-                        納品する
+                        {deliveringWorkId === work.id ? '納品中...' : '納品する'}
                       </button>
                     </div>
                   )}
                   {work.status === 'delivered' && (
                     <div className="mt-4 flex flex-col gap-2">
                       <button
-                        onClick={() => handleConfirmPayment(work.id)}
-                        disabled={confirmingPaymentId === work.id}
-                        className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                        onClick={() => handleDownload(work.id)}
+                        disabled={downloadingWorkId === work.id}
+                        className={`w-full px-4 py-2 border border-yellow-500 rounded-md text-yellow-600 hover:bg-yellow-50 ${
+                          downloadingWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
-                        {confirmingPaymentId === work.id ? '確認中...' : '入金確認'}
+                        {downloadingWorkId === work.id ? 'ダウンロード中...' : '納品物をダウンロード'}
                       </button>
-                    </div>
-                  )}
-                  {work.status === 'paid' && (
-                    <div className="text-sm text-green-600 mt-4">
-                      支払い済み
+                      {work.stripe_url && (
+                        <a
+                          href={work.stripe_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-center"
+                        >
+                          支払いページへ
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>

@@ -1,40 +1,43 @@
 import { Pool } from 'pg'
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+let pool: Pool | null = null;
 
-// 接続テスト
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
-});
+export function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
 
-// 接続が成功したことを確認
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('Database connection error:', err);
-  } else {
-    console.log('Database connected successfully');
-  }
-});
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle client', err);
+      process.exit(-1);
+    });
 
-export default pool;
-
-export async function sql(strings: TemplateStringsArray, ...values: any[]) {
-  try {
-    let text = "";
-    for (let i = 0; i < strings.length; i++) {
-      text += strings[i];
-      if (i < values.length) {
-        text += `$${i + 1}`; // $1, $2, ... の形式でパラメータバインド
+    pool.query('SELECT NOW()', (err) => {
+      if (err) {
+        console.error('Database connection error:', err);
+        process.exit(-1);
       }
-    }
-    console.log('Executing SQL:', text, 'with values:', values);
-    const result = await pool.query(text, values);
+    });
+  }
+  return pool;
+}
+
+export async function query(text: string, params: any[] = []) {
+  const client = await getPool().connect();
+  try {
+    const start = Date.now();
+    const result = await client.query(text, params);
+    const duration = Date.now() - start;
+    console.log('Executed query', { text, duration, rows: result.rowCount });
     return result;
   } catch (error) {
-    console.error('SQL execution error:', error);
+    console.error('Query error:', error);
     throw error;
+  } finally {
+    client.release();
   }
 } 

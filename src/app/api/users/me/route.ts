@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { NextResponse } from 'next/server'
 import { authOptions } from '@/lib/auth'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import crypto from 'crypto'
 
 export async function GET() {
@@ -11,6 +11,7 @@ export async function GET() {
   }
 
   try {
+    const pool = getPool();
     const { rows: [user] } = await pool.query(
       `SELECT 
         u.*,
@@ -56,6 +57,7 @@ export async function PUT(req: Request) {
     const body = await req.json()
     const { status, description, priceEntries } = body
 
+    const pool = getPool();
     // トランザクションを開始
     const client = await pool.connect()
     try {
@@ -67,9 +69,9 @@ export async function PUT(req: Request) {
         [status, description, session.user.id]
       )
 
-      // 既存の価格設定を削除
+      // 既存の価格設定を非表示に設定
       await client.query(
-        'DELETE FROM price_entries WHERE user_id = $1',
+        'UPDATE price_entries SET is_hidden = true WHERE user_id = $1',
         [session.user.id]
       )
 
@@ -82,7 +84,7 @@ export async function PUT(req: Request) {
           entry.amount,
           entry.stripe_url || '',
           entry.description || '',
-          entry.is_hidden ?? false
+          entry.isHidden ?? false
         ])
 
         const placeholders = values.map((_, i) => 

@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { Pool } from 'pg';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+import { query } from '@/lib/db';
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -15,26 +11,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await pool.query(
+    const result = await query(
       `SELECT 
         w.id,
         w.sequential_id,
         w.message,
         w.status,
+        w.amount,
         w.created_at,
-        p.amount,
-        p.stripe_url,
         u.name as creator_name,
         u.image as creator_image,
         u.username as creator_username
        FROM works w
-       JOIN users u ON w.creator_id = u.id
-       JOIN price_entries p ON w.price_entry_id = p.id
-       WHERE w.requester_id = $1
+       JOIN users u ON w.creator_id::text = u.id::text
+       WHERE w.requester_id::text = $1::text
        ORDER BY w.created_at DESC`,
       [session.user.id]
     );
 
+    console.log('Session:', session.user.id);
     console.log('Found works:', result.rows);
 
     const works = result.rows.map(row => ({
@@ -43,7 +38,6 @@ export async function GET(request: Request) {
       message: row.message,
       status: row.status,
       amount: row.amount,
-      stripe_url: row.stripe_url,
       creator: {
         name: row.creator_name,
         image: row.creator_image,

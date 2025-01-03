@@ -10,13 +10,12 @@ interface Work {
   id: string;
   sequentialId: number;
   message: string;
-  status: string;
+  status: WorkStatus;
   amount: number;
-  stripe_url: string;
   creator: {
     name: string;
     image: string;
-    username: string;
+    username: string | null;
   };
 }
 
@@ -273,19 +272,24 @@ export default function SentRequestsPage() {
                   </div>
                   {work.status === 'delivered' && (
                     <div className="mt-4 flex flex-col gap-2">
-                      <a
-                        href={work.stripe_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-center"
+                      <button
+                        onClick={() => handleDownload(work.id)}
+                        disabled={downloadingWorkId === work.id}
+                        className={`w-full px-4 py-2 border border-yellow-500 rounded-md text-yellow-600 hover:bg-yellow-50 ${
+                          downloadingWorkId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
-                        支払いページへ
-                      </a>
-                    </div>
-                  )}
-                  {work.status === 'paid' && (
-                    <div className="text-sm text-green-600">
-                      支払い済み
+                        {downloadingWorkId === work.id ? 'ダウンロード中...' : '納品物をダウンロード'}
+                      </button>
+                      <button
+                        onClick={() => handleConfirmPayment(work.id)}
+                        disabled={confirmingPaymentId === work.id}
+                        className={`w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 ${
+                          confirmingPaymentId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {confirmingPaymentId === work.id ? '処理中...' : '入金確認'}
+                      </button>
                     </div>
                   )}
                 </div>
