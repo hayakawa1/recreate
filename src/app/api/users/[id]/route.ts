@@ -1,45 +1,51 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { Pool } from 'pg';
+
+// poolをグローバルに保持
+let pool: Pool;
+
+// poolの初期化関数
+function getPool() {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+  }
+  return pool;
+}
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const result = await sql`
-      SELECT 
-        u.id,
-        u.name,
-        u.username,
-        u.image,
-        u.description,
-        u.status,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', p.id,
-              'amount', p.amount,
-              'description', p.description,
-              'stripe_url', p.stripe_url,
-              'is_hidden', p.is_hidden
-            )
-            ORDER BY p.amount
-          ) FILTER (WHERE p.id IS NOT NULL),
-          '[]'::json
-        ) as price_entries
-      FROM users u
-      LEFT JOIN price_entries p ON p.user_id = u.id
-      WHERE u.id = ${params.id}
-      GROUP BY u.id
-    `;
+    const db = getPool();
+    
+    // ユーザー情報を取得
+    const userResult = await db.query(
+      'SELECT id, name, username, image, description, status FROM users WHERE id = $1',
+      [params.id]
+    );
 
-    if (result.rows.length === 0) {
+    if (userResult.rows.length === 0) {
       return new NextResponse('User not found', { status: 404 });
     }
 
-    return NextResponse.json(result.rows[0]);
+    // 料金プランを取得
+    const priceResult = await db.query(
+      'SELECT id, amount, description, stripe_url, is_hidden FROM price_entries WHERE user_id = $1 ORDER BY amount',
+      [params.id]
+    );
+
+    // レスポンスを組み立て
+    const response = {
+      ...userResult.rows[0],
+      price_entries: priceResult.rows
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error('Error:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 
