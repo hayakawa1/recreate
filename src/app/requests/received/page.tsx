@@ -12,6 +12,7 @@ interface Work {
   description: string;
   status: WorkStatus;
   amount: number;
+  stripe_url: string | null;
   requester: {
     name: string;
     image: string;
@@ -22,17 +23,43 @@ interface Work {
 export default function ReceivedRequestsPage() {
   const { data: session } = useSession();
   const [works, setWorks] = useState<Work[]>([]);
+  const [filteredWorks, setFilteredWorks] = useState<Work[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingWorkId, setDownloadingWorkId] = useState<string | null>(null);
   const [deliveringWorkId, setDeliveringWorkId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<WorkStatus | 'all'>('all');
 
-  // 統計情報を計算
+  // 検索とフィルタリングを適用
+  useEffect(() => {
+    let result = [...works];
+    
+    // 検索フィルタを適用
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(work => 
+        work.description.toLowerCase().includes(query) ||
+        work.requester.name.toLowerCase().includes(query) ||
+        work.requester.username?.toLowerCase().includes(query) ||
+        work.sequentialId.toString().includes(query)
+      );
+    }
+
+    // ステータスフィルタを適用
+    if (statusFilter !== 'all') {
+      result = result.filter(work => work.status === statusFilter);
+    }
+
+    setFilteredWorks(result);
+  }, [works, searchQuery, statusFilter]);
+
+  // 統計情報を計算（filteredWorksを使用）
   const stats = {
-    total: works.length,
-    requested: works.filter(w => w.status === 'requested').length,
-    delivered: works.filter(w => w.status === 'delivered').length,
-    paid: works.filter(w => w.status === 'paid').length,
-    rejected: works.filter(w => w.status === 'rejected').length,
+    total: filteredWorks.length,
+    requested: filteredWorks.filter(w => w.status === 'requested').length,
+    delivered: filteredWorks.filter(w => w.status === 'delivered').length,
+    paid: filteredWorks.filter(w => w.status === 'paid').length,
+    rejected: filteredWorks.filter(w => w.status === 'rejected').length,
   };
 
   const handleDownload = async (workId: string) => {
@@ -138,6 +165,31 @@ export default function ReceivedRequestsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="col-span-full bg-white p-4 rounded-lg shadow mb-6">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="検索（説明文、リクエスター名、ID）"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as WorkStatus | 'all')}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="all">全てのステータス</option>
+                <option value="requested">リクエスト中</option>
+                <option value="delivered">納品済み</option>
+                <option value="paid">支払い済み</option>
+                <option value="rejected">拒否</option>
+              </select>
+            </div>
+          </div>
+
           <h2 className="text-lg font-semibold mb-2">統計情報</h2>
           <div className="grid grid-cols-5 gap-4">
             <div>
@@ -165,12 +217,12 @@ export default function ReceivedRequestsPage() {
 
         {isLoading ? (
           <div className="col-span-full text-center py-8">読み込み中...</div>
-        ) : works.length === 0 ? (
+        ) : filteredWorks.length === 0 ? (
           <div className="col-span-full text-center py-8">
-            リクエストはまだありません
+            {works.length === 0 ? 'リクエストはまだありません' : '条件に一致するリクエストはありません'}
           </div>
         ) : (
-          works.map((work) => (
+          filteredWorks.map((work) => (
             <div key={work.id} className="bg-white rounded-lg shadow">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -247,7 +299,7 @@ export default function ReceivedRequestsPage() {
                     </div>
                   )}
                   {work.status === 'delivered' && (
-                    <div className="mt-4">
+                    <div className="mt-4 flex flex-col gap-2">
                       <button
                         onClick={() => handleDownload(work.id)}
                         disabled={downloadingWorkId === work.id}
@@ -257,6 +309,16 @@ export default function ReceivedRequestsPage() {
                       >
                         {downloadingWorkId === work.id ? 'ダウンロード中...' : '納品物をダウンロード'}
                       </button>
+                      {work.stripe_url && (
+                        <a
+                          href={work.stripe_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-center"
+                        >
+                          支払いページへ
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>

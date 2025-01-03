@@ -22,16 +22,43 @@ interface Work {
 export default function SentRequestsPage() {
   const { data: session } = useSession();
   const [works, setWorks] = useState<Work[]>([]);
+  const [filteredWorks, setFilteredWorks] = useState<Work[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingWorkId, setDownloadingWorkId] = useState<string | null>(null);
+  const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<WorkStatus | 'all'>('all');
 
-  // 統計情報を計算
+  // 検索とフィルタリングを適用
+  useEffect(() => {
+    let result = [...works];
+    
+    // 検索フィルタを適用
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(work => 
+        work.description.toLowerCase().includes(query) ||
+        work.creator.name.toLowerCase().includes(query) ||
+        work.creator.username?.toLowerCase().includes(query) ||
+        work.sequentialId.toString().includes(query)
+      );
+    }
+
+    // ステータスフィルタを適用
+    if (statusFilter !== 'all') {
+      result = result.filter(work => work.status === statusFilter);
+    }
+
+    setFilteredWorks(result);
+  }, [works, searchQuery, statusFilter]);
+
+  // 統計情報を計算（filteredWorksを使用）
   const stats = {
-    total: works.length,
-    requested: works.filter(w => w.status === 'requested').length,
-    delivered: works.filter(w => w.status === 'delivered').length,
-    paid: works.filter(w => w.status === 'paid').length,
-    rejected: works.filter(w => w.status === 'rejected').length,
+    total: filteredWorks.length,
+    requested: filteredWorks.filter(w => w.status === 'requested').length,
+    delivered: filteredWorks.filter(w => w.status === 'delivered').length,
+    paid: filteredWorks.filter(w => w.status === 'paid').length,
+    rejected: filteredWorks.filter(w => w.status === 'rejected').length,
   };
 
   const handleDownload = async (workId: string) => {
@@ -49,6 +76,33 @@ export default function SentRequestsPage() {
       alert('ダウンロードに失敗しました');
     } finally {
       setDownloadingWorkId(null);
+    }
+  };
+
+  const handleConfirmPayment = async (workId: string) => {
+    setConfirmingPaymentId(workId);
+    try {
+      const response = await fetch(`/api/works/by-id/${workId}/paid`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        // 成功したら作品リストを更新
+        const updatedWorks = works.map(work => 
+          work.id === workId ? { ...work, status: 'paid' } : work
+        );
+        setWorks(updatedWorks);
+        alert('入金確認が完了しました');
+      } else {
+        const errorText = await response.text();
+        console.error('Payment confirmation failed:', errorText);
+        alert(`入金確認に失敗しました: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      alert(error instanceof Error ? error.message : '入金確認に失敗しました');
+    } finally {
+      setConfirmingPaymentId(null);
     }
   };
 
@@ -73,120 +127,143 @@ export default function SentRequestsPage() {
   }, [session]);
 
   if (!session) {
-    return (
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <div className="text-center">
-          <p className="text-gray-600">ログインしてください</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <div className="text-center">
-          <p className="text-gray-600">読み込み中...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">送信したリクエスト一覧</h1>
-        <Link
-          href="/requests/received"
-          className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-        >
-          <span>受信箱へ</span>
-          <span>→</span>
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">総リクエスト数</p>
-          <p className="text-2xl font-bold text-gray-700">{stats.total}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">依頼中</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.requested}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">納品済み</p>
-          <p className="text-2xl font-bold text-yellow-600">{stats.delivered}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">支払い完了</p>
-          <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <p className="text-sm text-gray-500">お断り</p>
-          <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
+        <h1 className="text-2xl font-bold">送信したリクエスト</h1>
+        <div className="flex gap-4">
+          <Link
+            href="/requests/received"
+            className="px-4 py-2 border border-yellow-500 text-yellow-600 rounded-md hover:bg-yellow-50"
+          >
+            受信一覧
+          </Link>
+          <Link
+            href="/requests/sent"
+            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+          >
+            送信一覧
+          </Link>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {works.length === 0 ? (
-          <p className="text-gray-600 text-center py-8">
-            送信したリクエストはありません
-          </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="col-span-full bg-white p-4 rounded-lg shadow mb-6">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="検索（説明文、クリエイター名、ID）"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as WorkStatus | 'all')}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="all">全てのステータス</option>
+                <option value="requested">リクエスト中</option>
+                <option value="delivered">納品済み</option>
+                <option value="paid">支払い済み</option>
+                <option value="rejected">拒否</option>
+              </select>
+            </div>
+          </div>
+
+          <h2 className="text-lg font-semibold mb-2">統計情報</h2>
+          <div className="grid grid-cols-5 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">全体</p>
+              <p className="text-xl font-bold">{stats.total}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">リクエスト中</p>
+              <p className="text-xl font-bold">{stats.requested}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">納品済み</p>
+              <p className="text-xl font-bold">{stats.delivered}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">支払い済み</p>
+              <p className="text-xl font-bold">{stats.paid}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">拒否</p>
+              <p className="text-xl font-bold">{stats.rejected}</p>
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="col-span-full text-center py-8">読み込み中...</div>
+        ) : filteredWorks.length === 0 ? (
+          <div className="col-span-full text-center py-8">
+            {works.length === 0 ? 'リクエストはまだありません' : '条件に一致するリクエストはありません'}
+          </div>
         ) : (
-          works.map((work) => (
-            <div
-              key={work.id}
-              className={`shadow rounded-lg overflow-hidden ${
-                work.status === 'requested' ? 'bg-blue-50' :
-                work.status === 'delivered' ? 'bg-yellow-50' :
-                work.status === 'paid' ? 'bg-green-50' :
-                work.status === 'rejected' ? 'bg-red-50' :
-                'bg-white'
-              }`}
-            >
+          filteredWorks.map((work) => (
+            <div key={work.id} className="bg-white rounded-lg shadow">
               <div className="p-6">
-                <div className="flex items-center space-x-4 mb-4">
-                  <Image
-                    src={work.creator.image}
-                    alt={work.creator.name}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 relative">
+                      <Image
+                        src={work.creator.image || '/default-avatar.png'}
+                        alt={work.creator.name}
+                        className="rounded-full"
+                        fill
+                        sizes="40px"
+                      />
+                    </div>
+                    <div className="ml-3">
+                      <p className="font-semibold">{work.creator.name}</p>
+                      {work.creator.username && (
+                        <p className="text-sm text-gray-500">
+                          @{work.creator.username}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                   <div>
-                    <p className="font-medium">{work.creator.name}</p>
-                    {work.creator.username && (
-                      <p className="text-sm text-gray-500">
-                        @{work.creator.username}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">リクエストID</span>
-                    <span className="text-sm font-medium">#{work.sequentialId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">金額</span>
-                    <span className="text-sm font-medium">
+                    <span className="text-lg font-bold">
                       ¥{work.amount.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">ステータス</span>
-                    <span className={`text-sm font-medium ${
-                      work.status === 'requested' ? 'text-blue-600' :
-                      work.status === 'delivered' ? 'text-yellow-600' :
-                      work.status === 'paid' ? 'text-green-600' :
-                      'text-red-600'
-                    }`}>
-                      {work.status === 'requested' && '依頼中'}
-                      {work.status === 'accepted' && '受付済み'}
-                      {work.status === 'rejected' && 'お断り'}
-                      {work.status === 'delivered' && '納品済み'}
-                      {work.status === 'paid' && '支払い完了'}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-sm text-gray-500">#{work.sequentialId}</span>
+                    <span
+                      className={`px-2 py-1 text-sm rounded-full ${
+                        work.status === 'requested'
+                          ? 'bg-blue-100 text-blue-800'
+                          : work.status === 'delivered'
+                          ? 'bg-green-100 text-green-800'
+                          : work.status === 'paid'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : work.status === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {work.status === 'requested'
+                        ? 'リクエスト中'
+                        : work.status === 'delivered'
+                        ? '納品済み'
+                        : work.status === 'paid'
+                        ? '支払い済み'
+                        : work.status === 'rejected'
+                        ? '拒否'
+                        : work.status}
                     </span>
                   </div>
                   <div>
@@ -196,7 +273,7 @@ export default function SentRequestsPage() {
                     </p>
                   </div>
                   {work.status === 'delivered' && (
-                    <div className="mt-4">
+                    <div className="mt-4 flex flex-col gap-2">
                       <button
                         onClick={() => handleDownload(work.id)}
                         disabled={downloadingWorkId === work.id}
@@ -205,6 +282,15 @@ export default function SentRequestsPage() {
                         }`}
                       >
                         {downloadingWorkId === work.id ? 'ダウンロード中...' : '納品物をダウンロード'}
+                      </button>
+                      <button
+                        onClick={() => handleConfirmPayment(work.id)}
+                        disabled={confirmingPaymentId === work.id}
+                        className={`w-full px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 ${
+                          confirmingPaymentId === work.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {confirmingPaymentId === work.id ? '処理中...' : '入金確認'}
                       </button>
                     </div>
                   )}
